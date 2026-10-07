@@ -218,3 +218,40 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# =============================================================================
+# SCF Engine — Project-Specific Ignores
+# =============================================================================
+
+# Generated datasets (live in GCS — never commit large CSVs/JSONs)
+data/
+data/generated/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# uv
+.venv/
+uv.lock
+
+# GCP credentials — NEVER commit
+gcp-credentials.json
+service-account-key.json
+application_default_credentials.json
+
+# ML artefacts
+*.pkl
+*.joblib
+*.model
+packages/orchestrator/ml/models/
+
+# Next.js
+apps/web/.next/
+apps/web/node_modules/
+
+# Pytest / coverage
+.coverage
+htmlcov/
+.pytest_cache/
