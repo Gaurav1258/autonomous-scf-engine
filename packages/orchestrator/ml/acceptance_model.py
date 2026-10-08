@@ -110,6 +110,34 @@ class SupplierAcceptanceModel:
 
         if self.model_path.exists():
             self.load()
+        else:
+            if self.download_from_gcs():
+                self.load()
+
+    def download_from_gcs(self) -> bool:
+        """Attempts to download model artifact and metadata from GCS."""
+        try:
+            from google.cloud import storage
+
+            project_id = os.getenv("GCP_PROJECT_ID")
+            bucket_name = os.getenv("GCS_BUCKET_NAME")
+            if not project_id or not bucket_name:
+                return False
+
+            client = storage.Client(project=project_id)
+            bucket = client.bucket(bucket_name)
+            blob = bucket.blob(GCS_MODEL_PATH)
+            if blob.exists():
+                self.model_path.parent.mkdir(parents=True, exist_ok=True)
+                blob.download_to_filename(str(self.model_path))
+                meta_blob = bucket.blob("models/model_metadata.json")
+                if meta_blob.exists():
+                    meta_blob.download_to_filename(str(self.meta_path))
+                print(f"[Model Download] Downloaded model from gs://{bucket_name}/{GCS_MODEL_PATH}")
+                return True
+        except Exception as e:
+            print(f"[Model Download] Could not fetch from GCS: {e}")
+        return False
 
     def _prepare_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         """

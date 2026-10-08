@@ -2,20 +2,29 @@
 # Google Cloud Build CI/CD Pipeline
 # Autonomous Supply Chain Finance & Working Capital Floating Engine
 # =============================================================================
-# Strict Automated Quality Gates:
-# 1. Runs full test suite (financial math, RapidFuzz normalizer, guardrails).
-#    FAILS THE BUILD immediately if any test fails or invariants are breached.
-# 2. Executes XGBoost model training directly inside the Cloud Build container.
-# 3. Validates model quality benchmarks (ROC-AUC >= 0.70, latency < 15ms).
-# 4. Syncs versioned model artifacts to GCS (gs://$PROJECT_ID$_BUCKET_SUFFIX/models/).
+# Strict 3-Stage Quality Gate Architecture:
+#
+# Stage 1: Pre-Training Unit & Financial Math Gate
+#          Runs all unit tests (math solver, normalizer, guardrails, dataset).
+#          FAILS THE BUILD immediately if any code change breaks financial logic.
+#          Zero training or GCS writes happen if Stage 1 fails.
+#
+# Stage 2: In-Pipeline XGBoost Training on GCP
+#          Trains the model inside Cloud Build from the GCS dataset and syncs
+#          the versioned model artifact to gs://$PROJECT_ID$_BUCKET_SUFFIX/models/.
+#
+# Stage 3: Post-Training ML Benchmark Quality Gate
+#          Verifies newly trained model satisfies ROC-AUC >= 0.70, monotonicity,
+#          sub-15ms latency, and FastMCP tool contracts.
+#          FAILS THE BUILD if model quality degrades.
 # =============================================================================
 
 steps:
   # ---------------------------------------------------------------------------
-  # Step 1: Strict Quality Gate (Unit & Financial Tests)
+  # Step 1: Strict Pre-Training Quality Gate (Pure Unit & Financial Tests)
   # ---------------------------------------------------------------------------
   - name: 'python:3.11-slim'
-    id: 'unit-tests-quality-gate'
+    id: 'stage-1-unit-tests-quality-gate'
     entrypoint: 'bash'
     env:
       - 'GCP_PROJECT_ID=$PROJECT_ID'
@@ -26,19 +35,19 @@ steps:
       - |
         set -e
         echo "============================================================"
-        echo "STEP 1: RUNNING STRICT UNIT & FINANCIAL MATH TEST GATES"
-        echo "Project: $$GCP_PROJECT_ID | Bucket: $$GCS_BUCKET_NAME"
+        echo "STAGE 1: STRICT PRE-TRAINING QUALITY GATE"
+        echo "Testing Financial Math, Normalizer, Guardrails & Dataset..."
         echo "============================================================"
         pip install --no-cache-dir uv
         uv sync --dev
-        uv run pytest -v --tb=short
-        echo ">>> All quality gates passed successfully."
+        uv run pytest tests/test_math_solver.py tests/test_normalizer.py tests/test_guardrails.py tests/test_dataset_generator.py -v --tb=short
+        echo ">>> STAGE 1 PASSED: All core unit, math, and guardrail gates verified."
 
   # ---------------------------------------------------------------------------
-  # Step 2: Pipeline Model Training & GCS Sync
+  # Step 2: Pipeline Model Training on GCP & GCS Sync
   # ---------------------------------------------------------------------------
   - name: 'python:3.11-slim'
-    id: 'train-and-sync-model'
+    id: 'stage-2-train-and-sync-model'
     entrypoint: 'bash'
     env:
       - 'GCP_PROJECT_ID=$PROJECT_ID'
@@ -49,18 +58,18 @@ steps:
       - |
         set -e
         echo "============================================================"
-        echo "STEP 2: TRAINING XGBOOST MODEL IN PIPELINE ON GCP"
+        echo "STAGE 2: TRAINING XGBOOST MODEL IN PIPELINE ON GCP"
         echo "Project: $$GCP_PROJECT_ID | Bucket: $$GCS_BUCKET_NAME"
         echo "============================================================"
         pip install --no-cache-dir uv
         uv run python packages/orchestrator/ml/acceptance_model.py
-        echo ">>> Pipeline model training complete and synced to GCS."
+        echo ">>> STAGE 2 PASSED: Model trained and synced to GCS."
 
   # ---------------------------------------------------------------------------
-  # Step 3: Post-Training Benchmark & Invariant Verification
+  # Step 3: Post-Training ML Benchmark & FastMCP Quality Gate
   # ---------------------------------------------------------------------------
   - name: 'python:3.11-slim'
-    id: 'verify-model-benchmarks'
+    id: 'stage-3-ml-benchmarks-quality-gate'
     entrypoint: 'bash'
     env:
       - 'GCP_PROJECT_ID=$PROJECT_ID'
@@ -71,12 +80,11 @@ steps:
       - |
         set -e
         echo "============================================================"
-        echo "STEP 3: VERIFYING MODEL PERFORMANCE BENCHMARKS"
-        echo "Project: $$GCP_PROJECT_ID | Bucket: $$GCS_BUCKET_NAME"
+        echo "STAGE 3: VERIFYING ML BENCHMARKS & FASTMCP TOOL CONTRACTS"
         echo "============================================================"
         pip install --no-cache-dir uv
-        uv run pytest tests/test_acceptance_ml.py -v
-        echo ">>> Model benchmarks verified: ROC-AUC, monotonicity, and latency passed."
+        uv run pytest tests/test_acceptance_ml.py tests/test_mcp_server.py -v --tb=short
+        echo ">>> STAGE 3 PASSED: ROC-AUC, latency, price elasticity & MCP contracts verified."
 
 # -----------------------------------------------------------------------------
 # Parameterized Substitutions (Zero Hardcoded Private Information)

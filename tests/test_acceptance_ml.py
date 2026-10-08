@@ -32,9 +32,12 @@ from packages.orchestrator.ml.acceptance_model import (
 
 @pytest.fixture(scope="module")
 def loaded_model() -> SupplierAcceptanceModel:
-    """Fixture providing a loaded instance of the trained model."""
-    assert MODEL_FILE.exists(), f"Model file missing at {MODEL_FILE}. Run acceptance_model.py first."
-    return SupplierAcceptanceModel(model_path=MODEL_FILE)
+    """Fixture providing a loaded instance of the trained model (downloads or trains if missing)."""
+    model = SupplierAcceptanceModel(model_path=MODEL_FILE)
+    if not MODEL_FILE.exists() or model.model is None:
+        from packages.orchestrator.ml.acceptance_model import train_and_export
+        model, _ = train_and_export()
+    return model
 
 
 @pytest.fixture
@@ -62,7 +65,7 @@ def base_invoice_features() -> dict:
 class TestModelArtifactsAndMetrics:
     """Verify saved artifacts and performance benchmarks."""
 
-    def test_model_files_exist(self):
+    def test_model_files_exist(self, loaded_model):
         assert MODEL_FILE.exists(), "Model artifact file missing"
         assert META_FILE.exists(), "Model metadata file missing"
         assert MODEL_FILE.stat().st_size > 10_000, "Model file seems too small"

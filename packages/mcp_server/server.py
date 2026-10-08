@@ -49,8 +49,9 @@ _acceptance_model: Optional[SupplierAcceptanceModel] = None
 def _get_acceptance_model() -> SupplierAcceptanceModel:
     global _acceptance_model
     if _acceptance_model is None:
-        if MODEL_FILE.exists():
-            _acceptance_model = SupplierAcceptanceModel(model_path=MODEL_FILE)
+        model = SupplierAcceptanceModel(model_path=MODEL_FILE)
+        if model.model is not None:
+            _acceptance_model = model
         else:
             raise RuntimeError(f"Acceptance model not found at {MODEL_FILE}. Run acceptance_model.py first.")
     return _acceptance_model
