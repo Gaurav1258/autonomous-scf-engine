@@ -22,9 +22,15 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Any, Optional
+
+# Ensure workspace root is always in sys.path
+_ROOT_DIR = str(Path(__file__).resolve().parents[3])
+if _ROOT_DIR not in sys.path:
+    sys.path.insert(0, _ROOT_DIR)
 
 import numpy as np
 import pandas as pd
@@ -357,7 +363,10 @@ def load_training_data() -> pd.DataFrame:
 
     bucket_name = get_gcs_bucket_name()
     print(f"[Data Loader] Local dataset not found. Streaming from gs://{bucket_name}/{GCS_DATASET_PATH}...")
-    from packages.orchestrator.ml.gcs_uploader import download_dataset
+    try:
+        from packages.orchestrator.ml.gcs_uploader import download_dataset
+    except ModuleNotFoundError:
+        from gcs_uploader import download_dataset
     download_dataset(GCS_DATASET_PATH, LOCAL_DATA_FILE)
     return pd.read_csv(LOCAL_DATA_FILE)
 
