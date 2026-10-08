@@ -1,0 +1,91 @@
+# =============================================================================
+# Google Cloud Build CI/CD Pipeline
+# Autonomous Supply Chain Finance & Working Capital Floating Engine
+# =============================================================================
+# Strict Automated Quality Gates:
+# 1. Runs full test suite (financial math, RapidFuzz normalizer, guardrails).
+#    FAILS THE BUILD immediately if any test fails or invariants are breached.
+# 2. Executes XGBoost model training directly inside the Cloud Build container.
+# 3. Validates model quality benchmarks (ROC-AUC >= 0.70, latency < 15ms).
+# 4. Syncs versioned model artifacts to GCS (gs://$GCS_BUCKET_NAME/models/).
+# =============================================================================
+
+steps:
+  # ---------------------------------------------------------------------------
+  # Step 1: Strict Quality Gate (Unit & Financial Tests)
+  # ---------------------------------------------------------------------------
+  - name: 'python:3.11-slim'
+    id: 'unit-tests-quality-gate'
+    entrypoint: 'bash'
+    env:
+      - 'GCP_PROJECT_ID=$PROJECT_ID'
+      - 'GCP_REGION=$_REGION'
+    args:
+      - '-c'
+      - |
+        set -e
+        # Derive bucket name: use override if specified, otherwise default to ${PROJECT_ID}-scf-data
+        export GCS_BUCKET_NAME="${_GCS_BUCKET_NAME:-${PROJECT_ID}-scf-data}"
+        echo "============================================================"
+        echo "STEP 1: RUNNING STRICT UNIT & FINANCIAL MATH TEST GATES"
+        echo "Project: $PROJECT_ID | Bucket: $GCS_BUCKET_NAME"
+        echo "============================================================"
+        pip install --no-cache-dir uv
+        uv sync --dev
+        uv run pytest -v --tb=short
+        echo ">>> All quality gates passed successfully."
+
+  # ---------------------------------------------------------------------------
+  # Step 2: Pipeline Model Training & GCS Sync
+  # ---------------------------------------------------------------------------
+  - name: 'python:3.11-slim'
+    id: 'train-and-sync-model'
+    entrypoint: 'bash'
+    env:
+      - 'GCP_PROJECT_ID=$PROJECT_ID'
+      - 'GCP_REGION=$_REGION'
+    args:
+      - '-c'
+      - |
+        set -e
+        export GCS_BUCKET_NAME="${_GCS_BUCKET_NAME:-${PROJECT_ID}-scf-data}"
+        echo "============================================================"
+        echo "STEP 2: TRAINING XGBOOST MODEL IN PIPELINE ON GCP"
+        echo "Project: $PROJECT_ID | Bucket: $GCS_BUCKET_NAME"
+        echo "============================================================"
+        pip install --no-cache-dir uv
+        uv run python packages/orchestrator/ml/acceptance_model.py
+        echo ">>> Pipeline model training complete and synced to GCS."
+
+  # ---------------------------------------------------------------------------
+  # Step 3: Post-Training Benchmark & Invariant Verification
+  # ---------------------------------------------------------------------------
+  - name: 'python:3.11-slim'
+    id: 'verify-model-benchmarks'
+    entrypoint: 'bash'
+    env:
+      - 'GCP_PROJECT_ID=$PROJECT_ID'
+      - 'GCP_REGION=$_REGION'
+    args:
+      - '-c'
+      - |
+        set -e
+        export GCS_BUCKET_NAME="${_GCS_BUCKET_NAME:-${PROJECT_ID}-scf-data}"
+        echo "============================================================"
+        echo "STEP 3: VERIFYING MODEL PERFORMANCE BENCHMARKS"
+        echo "============================================================"
+        pip install --no-cache-dir uv
+        uv run pytest tests/test_acceptance_ml.py -v
+        echo ">>> Model benchmarks verified: ROC-AUC, monotonicity, and latency passed."
+
+# -----------------------------------------------------------------------------
+# Parameterized Substitutions (Zero Hardcoded Private Information)
+# -----------------------------------------------------------------------------
+substitutions:
+  _GCS_BUCKET_NAME: ''  # If empty, automatically resolves to ${PROJECT_ID}-scf-data
+  _REGION: 'us-central1'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: '1200s'

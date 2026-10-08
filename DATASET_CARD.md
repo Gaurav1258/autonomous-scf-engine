@@ -73,7 +73,7 @@ This guarantees a realistic **~51.8% overall acceptance rate**, reflecting real-
 
 Datasets are hosted in Google Cloud Storage:
 ```
-gs://mlops2215-scf-data/
+gs://<your-gcs-bucket-name>/
 └── datasets/
     ├── ml/
     │   └── scf_supplier_acceptance_dataset.csv       (50,000 rows, 9.3 MB)
@@ -89,6 +89,7 @@ gs://mlops2215-scf-data/
 ## 🚀 Quickstart: Loading the Data with Python
 
 ```python
+import os
 import pandas as pd
 from google.cloud import storage
 
@@ -96,8 +97,11 @@ from google.cloud import storage
 df = pd.read_csv("data/generated/scf_supplier_acceptance_dataset.csv")
 
 # Option 2: Stream directly from GCS (requires gcloud ADC)
-client = storage.Client(project="mlops2215")
-bucket = client.bucket("mlops2215-scf-data")
+project_id = os.getenv("GCP_PROJECT_ID", "your-gcp-project-id")
+bucket_name = os.getenv("GCS_BUCKET_NAME", "your-gcs-bucket-name")
+
+client = storage.Client(project=project_id)
+bucket = client.bucket(bucket_name)
 blob = bucket.blob("datasets/ml/scf_supplier_acceptance_dataset.csv")
 blob.download_to_filename("scf_dataset.csv")
 df = pd.read_csv("scf_dataset.csv")
