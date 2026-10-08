@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from datetime import date
 from pathlib import Path
@@ -47,6 +48,114 @@ TERM_PATTERNS = [
     # "EOM + 30", "EOM 30"
     re.compile(r"eom\s*(?:\+\s*)?(?P<net_days>\d+)?", re.IGNORECASE),
 ]
+
+DEFAULT_SEED_VENDOR_MASTER: list[dict[str, Any]] = [
+    {
+        "supplier_id": "SUPP-00001",
+        "canonical_name": "Reliance Industries Ltd.",
+        "name_aliases": [
+            "Reliance Ind.",
+            "RELIANCE IND LTD",
+            "Reliance Industries",
+            "RELIANCE INDS.",
+            "Reliance Industries Limited",
+        ],
+        "tax_id": "12-3456789",
+        "gstin": "27AAACR1234A1Z5",
+        "sector": "Conglomerate",
+        "risk_tier": "TIER_1_PRIME",
+    },
+    {
+        "supplier_id": "SUPP-00002",
+        "canonical_name": "Tata Consultancy Services Ltd.",
+        "name_aliases": [
+            "TCS Ltd.",
+            "TATA CONSULTANCY SERV",
+            "Tata Consultancy",
+            "T.C.S. Limited",
+        ],
+        "tax_id": "98-7654321",
+        "gstin": "27AAACT5678B1Z2",
+        "sector": "IT Services",
+        "risk_tier": "TIER_1_PRIME",
+    },
+    {
+        "supplier_id": "SUPP-00003",
+        "canonical_name": "Mahindra & Mahindra Ltd.",
+        "name_aliases": [
+            "M&M Ltd",
+            "MAHINDRA AND MAHINDRA",
+            "Mahindra & Mahindra",
+            "Mahindra Mahindra",
+        ],
+        "tax_id": "45-6789012",
+        "gstin": "27AAACM9012C1Z8",
+        "sector": "Manufacturing",
+        "risk_tier": "TIER_2_STABLE",
+    },
+    {
+        "supplier_id": "SUPP-00004",
+        "canonical_name": "Larsen & Toubro Ltd.",
+        "name_aliases": [
+            "L&T Ltd",
+            "LARSEN AND TOUBRO",
+            "Larsen Toubro",
+            "L & T Limited",
+        ],
+        "tax_id": "33-4455667",
+        "gstin": "27AAACL3344D1Z9",
+        "sector": "Construction",
+        "risk_tier": "TIER_1_PRIME",
+    },
+    {
+        "supplier_id": "SUPP-00005",
+        "canonical_name": "Wipro Technologies Ltd.",
+        "name_aliases": [
+            "Wipro Ltd.",
+            "WIPRO TECH",
+            "Wipro Technologies",
+            "WIPRO LTD",
+        ],
+        "tax_id": "55-6677889",
+        "gstin": "29AAACW5566E1Z1",
+        "sector": "IT Services",
+        "risk_tier": "TIER_2_STABLE",
+    },
+]
+
+
+def load_default_vendor_master() -> list[dict[str, Any]]:
+    """
+    Loads vendor master: checks local generated file, then GCS, and falls back
+    to built-in canonical seed records.
+    """
+    local_file = Path("data/generated/synthetic_vendor_master.json")
+    if local_file.exists():
+        try:
+            with open(local_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+
+    # Try downloading from GCS if configured
+    try:
+        from google.cloud import storage
+
+        project_id = os.getenv("GCP_PROJECT_ID")
+        bucket_name = os.getenv("GCS_BUCKET_NAME")
+        if project_id and bucket_name:
+            client = storage.Client(project=project_id)
+            bucket = client.bucket(bucket_name)
+            blob = bucket.blob("datasets/synthetic/synthetic_vendor_master.json")
+            if blob.exists():
+                local_file.parent.mkdir(parents=True, exist_ok=True)
+                blob.download_to_filename(str(local_file))
+                with open(local_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+    except Exception:
+        pass
+
+    return DEFAULT_SEED_VENDOR_MASTER
 
 
 def parse_payment_terms(raw_term_string: str) -> PaymentTerms:
@@ -261,13 +370,7 @@ def extract_trade_context(
     the validated CleanTradeContext model.
     """
     if vendor_master is None:
-        # Load local synthetic master if available
-        vendor_master_file = Path("data/generated/synthetic_vendor_master.json")
-        if vendor_master_file.exists():
-            with open(vendor_master_file, "r", encoding="utf-8") as f:
-                vendor_master = json.load(f)
-        else:
-            vendor_master = []
+        vendor_master = load_default_vendor_master()
 
     invoice_id = str(raw_invoice.get("invoice_id", "INV-UNKNOWN")).strip()
     erp_source = str(raw_invoice.get("erp_source", "SAP_S4HANA"))
