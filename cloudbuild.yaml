@@ -7,7 +7,7 @@
 #    FAILS THE BUILD immediately if any test fails or invariants are breached.
 # 2. Executes XGBoost model training directly inside the Cloud Build container.
 # 3. Validates model quality benchmarks (ROC-AUC >= 0.70, latency < 15ms).
-# 4. Syncs versioned model artifacts to GCS (gs://$GCS_BUCKET_NAME/models/).
+# 4. Syncs versioned model artifacts to GCS (gs://$PROJECT_ID$_BUCKET_SUFFIX/models/).
 # =============================================================================
 
 steps:
@@ -19,16 +19,15 @@ steps:
     entrypoint: 'bash'
     env:
       - 'GCP_PROJECT_ID=$PROJECT_ID'
+      - 'GCS_BUCKET_NAME=$PROJECT_ID$_BUCKET_SUFFIX'
       - 'GCP_REGION=$_REGION'
     args:
       - '-c'
       - |
         set -e
-        # Derive bucket name: use override if specified, otherwise default to ${PROJECT_ID}-scf-data
-        export GCS_BUCKET_NAME="${_GCS_BUCKET_NAME:-${PROJECT_ID}-scf-data}"
         echo "============================================================"
         echo "STEP 1: RUNNING STRICT UNIT & FINANCIAL MATH TEST GATES"
-        echo "Project: $PROJECT_ID | Bucket: $GCS_BUCKET_NAME"
+        echo "Project: $$GCP_PROJECT_ID | Bucket: $$GCS_BUCKET_NAME"
         echo "============================================================"
         pip install --no-cache-dir uv
         uv sync --dev
@@ -43,15 +42,15 @@ steps:
     entrypoint: 'bash'
     env:
       - 'GCP_PROJECT_ID=$PROJECT_ID'
+      - 'GCS_BUCKET_NAME=$PROJECT_ID$_BUCKET_SUFFIX'
       - 'GCP_REGION=$_REGION'
     args:
       - '-c'
       - |
         set -e
-        export GCS_BUCKET_NAME="${_GCS_BUCKET_NAME:-${PROJECT_ID}-scf-data}"
         echo "============================================================"
         echo "STEP 2: TRAINING XGBOOST MODEL IN PIPELINE ON GCP"
-        echo "Project: $PROJECT_ID | Bucket: $GCS_BUCKET_NAME"
+        echo "Project: $$GCP_PROJECT_ID | Bucket: $$GCS_BUCKET_NAME"
         echo "============================================================"
         pip install --no-cache-dir uv
         uv run python packages/orchestrator/ml/acceptance_model.py
@@ -65,14 +64,15 @@ steps:
     entrypoint: 'bash'
     env:
       - 'GCP_PROJECT_ID=$PROJECT_ID'
+      - 'GCS_BUCKET_NAME=$PROJECT_ID$_BUCKET_SUFFIX'
       - 'GCP_REGION=$_REGION'
     args:
       - '-c'
       - |
         set -e
-        export GCS_BUCKET_NAME="${_GCS_BUCKET_NAME:-${PROJECT_ID}-scf-data}"
         echo "============================================================"
         echo "STEP 3: VERIFYING MODEL PERFORMANCE BENCHMARKS"
+        echo "Project: $$GCP_PROJECT_ID | Bucket: $$GCS_BUCKET_NAME"
         echo "============================================================"
         pip install --no-cache-dir uv
         uv run pytest tests/test_acceptance_ml.py -v
@@ -82,7 +82,7 @@ steps:
 # Parameterized Substitutions (Zero Hardcoded Private Information)
 # -----------------------------------------------------------------------------
 substitutions:
-  _GCS_BUCKET_NAME: ''  # If empty, automatically resolves to ${PROJECT_ID}-scf-data
+  _BUCKET_SUFFIX: '-scf-data'
   _REGION: 'us-central1'
 
 options:
