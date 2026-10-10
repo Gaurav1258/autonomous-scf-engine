@@ -85,33 +85,44 @@ autonomous-scf-engine/
 ├── packages/
 │   ├── mcp_server/                  # scf-agent-toolkit (Reusable FastMCP Server)
 │   │   ├── server.py                # FastMCP server entry point (stdio & SSE modes)
+│   │   ├── models/
+│   │   │   └── schemas.py           # Pydantic data contracts (CleanTradeContext, etc.)
 │   │   └── modules/
-│   │       ├── normalizer.py        # Module A: Trade Ledger Context Normalizer
-│   │       ├── math_solver.py       # Module B: Deterministic Working Capital Solver
-│   │       └── guardrails.py        # Module C: Pre-Flight Guardrails & Limit Validator
+│   │       ├── normalizer.py        # Module A: Trade Ledger Context Normalizer (RapidFuzz)
+│   │       ├── math_solver.py       # Module B: FASB ASC 310 Deterministic Solver (Decimal)
+│   │       └── guardrails.py        # Module C: Pre-Flight Guardrails & SHA256 Signatures
 │   │
 │   └── orchestrator/                # LangGraph Multi-Agent Engine
-│       ├── graph.py                 # LangGraph state machine & conditional routers
-│       ├── state.py                 # Strict Pydantic A2A state schema (SCFGraphState)
-│       ├── agents/
-│       │   ├── cash_forecaster.py   # 60-day cash curve & credit facility analyst
-│       │   ├── risk_sentinel.py     # Entity resolution & sanctions checker
-│       │   ├── capital_structurer.py# Yield optimizer & term sheet builder
-│       │   └── treasury_dispatcher.py # 1-click execution payload assembler
+│       ├── graph.py                 # LangGraph StateGraph & conditional branch routers
+│       ├── state.py                 # TypedDict SCFGraphState with operator.add reducers
+│       ├── nodes/                   # 5 Autonomous Agent Worker Nodes
+│       │   ├── cash_forecaster.py   # Node 1: 60-day cash curve & credit facility analyst
+│       │   ├── risk_sentinel.py     # Node 2: RapidFuzz entity resolution & OFAC sanctions
+│       │   ├── capital_structurer.py# Node 3: XGBoost elasticity curve & dynamic pricing
+│       │   ├── guardrail_validator.py# Node 4: Credit limits & 15% concentration checks
+│       │   └── treasury_dispatcher.py # Node 5: 1-click execution payload & 48h expiry token
 │       └── ml/
 │           ├── acceptance_model.py  # XGBoost supplier discount acceptance estimator
-│           └── dataset_generator.py # Synthetic historical trade dataset generator
+│           ├── dataset_generator.py # Synthetic historical trade dataset generator (50k rows)
+│           └── gcs_uploader.py      # Google Cloud Storage data lake sync
 │
-├── tests/                           # 100% Test-Driven Verification Suite
-│   ├── test_normalizer.py           # RapidFuzz Golden Record & term parser tests
-│   ├── test_math_solver.py          # ACT/360, ACT/365, APR & penny precision tests
-│   ├── test_guardrails.py           # Credit limit breach & sanctions blocking tests
-│   ├── test_acceptance_ml.py        # XGBoost inference & probability edge cases
-│   ├── test_orchestrator.py         # Full LangGraph state machine execution tests
-│   └── test_api_routes.py           # FastAPI REST and SSE streaming tests
+├── tests/                           # 100% Test-Driven Verification Suite (115 passing tests)
+│   ├── test_math_solver.py          # ACT/360, ACT/365, APR & penny precision tests (19 tests)
+│   ├── test_normalizer.py           # RapidFuzz Golden Record & term parser tests (22 tests)
+│   ├── test_guardrails.py           # Credit limit breach & sanctions blocking tests (23 tests)
+│   ├── test_dataset_generator.py    # Synthetic dataset distribution & schema tests (14 tests)
+│   ├── test_acceptance_ml.py        # XGBoost inference, monotonicity & latency tests (11 tests)
+│   ├── test_mcp_server.py           # FastMCP tool contracts & schema validation (6 tests)
+│   ├── test_state.py                # State immutability & reducer tests (3 tests)
+│   ├── test_cash_forecaster.py      # Cash trajectory & DD vs RF recommendation tests (3 tests)
+│   ├── test_risk_sentinel.py        # Sanctions halting & entity resolution tests (3 tests)
+│   ├── test_capital_structurer.py   # Elasticity curve & solver pricing tests (2 tests)
+│   ├── test_guardrail_validator.py  # Credit cap breach & SHA256 signature tests (3 tests)
+│   ├── test_treasury_dispatcher.py  # Token expiry & webhook packaging tests (3 tests)
+│   └── test_graph.py                # End-to-end multi-agent LangGraph integration tests (3 tests)
 │
-├── cloudbuild.yaml                  # GCP Cloud Build CI/CD Configuration
-├── pyproject.toml                   # Root Python configuration
+├── cloudbuild.yaml                  # GCP Cloud Build 4-Stage CI/CD Pipeline
+├── pyproject.toml                   # Root uv workspace configuration
 └── README.md
 ```
 
@@ -240,37 +251,21 @@ def simulate_reverse_factoring_spread(
 ---
 
 ### 5.2 Agent-to-Agent (A2A) Strict State Machine
-All inter-agent communication in LangGraph is governed by strict Pydantic v2 schemas:
+All inter-agent communication in LangGraph is governed by strict Pydantic v2 domain schemas and a TypedDict state machine with conflict-free reducers:
 
 ```python
-class SCFGraphState(BaseModel):
-    # Raw Ingestion
-    raw_invoice_id: str
-    raw_invoice_payload: dict
-    
-    # Normalized Trade Context (Output of Module A)
-    trade_context: Optional[CleanTradeContext] = None
-    
-    # Cash Flow & Credit Telemetry
-    cash_forecast: Optional[CashForecastTelemetry] = None
-    facility_status: Optional[CreditFacilityStatus] = None
-    
-    # Supplier Intelligence & ML Prediction
-    supplier_risk_tier: Optional[str] = None
-    ml_acceptance_curve: Optional[dict] = None
-    
-    # Financing Structuring (Output of Module B)
-    recommended_instrument: Optional[str] = None # DYNAMIC_DISCOUNTING | REVERSE_FACTORING
-    financial_quote: Optional[FinancingQuote] = None
-    
-    # Pre-Flight Validation (Output of Module C)
-    guardrail_verdict: Optional[GuardrailVerdict] = None
-    
-    # Execution & Human-in-the-Loop
-    actionable_payload: Optional[ActionablePayload] = None
-    treasurer_decision: Optional[str] = None # PENDING | APPROVED | REJECTED
-    execution_status: str = "INITIALIZED"
-    audit_log: list[dict] = []
+class SCFGraphState(TypedDict):
+    """The central state dossier passed across all 5 LangGraph worker nodes."""
+    raw_invoice: dict[str, Any]
+    cash_forecast: Optional[CashForecastTelemetry]
+    risk_profile: Optional[SupplierRiskProfile]
+    optimal_structure: Optional[FinancingStructure]
+    candidate_curve: Optional[list[ElasticityCurvePoint]]
+    guardrail_verdict: Optional[GuardrailVerdict]
+    final_payload: Optional[DispatchedPayload]
+    status: WorkflowStatus
+    audit_trail: Annotated[list[str], operator.add]  # Appends logs without overwriting
+    errors: Annotated[list[str], operator.add]        # Appends errors without overwriting
 ```
 
 ---
@@ -279,21 +274,16 @@ class SCFGraphState(BaseModel):
 
 ```mermaid
 flowchart TD
-    START([START: Invoice Approved Event]) --> NORM[Node: Normalize & Deduplicate\nCalls MCP: extract_trade_context]
-    NORM --> FORK{Parallel Telemetry}
-    FORK --> CASH[Node: Cash Flow Forecaster\nAnalyzes 60-day cash & idle line]
-    FORK --> RISK[Node: Risk Sentinel\nSanctions screening & vendor tiering]
-    CASH --> ML[Node: Hybrid ML Predictor\nXGBoost predicts acceptance curve]
-    RISK --> ML
-    ML --> STRUCT[Node: Capital Deal Structurer\nCalls MCP: Dynamic Discounting vs RF Math]
-    STRUCT --> GUARD[Node: Pre-Flight Guardrail Validator\nCalls MCP: verify_facility_guardrails]
-    GUARD --> DECISION{Guardrail Verdict?}
-    DECISION -->|Approved| DISPATCH[Node: Treasury Dispatcher\nPrepares 1-Click Dual Payload]
-    DECISION -->|Rejected| ESCALATE[Node: Escalation & Audit Log\nLogs covenant breach]
-    DISPATCH --> HITL[Human-in-the-Loop Checkpoint\nTreasurer & Supplier 1-Click Action]
-    HITL --> SETTLE[Core Banking Settlement]
-    ESCALATE --> FIN([END])
-    SETTLE --> FIN
+    START([START: Ingest Raw Invoice]) --> FORECASTER[Node 1: Cash Forecaster\nProjects 60-day cash vs $10M floor\nRecommends DD vs RF]
+    FORECASTER --> SENTINEL[Node 2: Risk Sentinel\nRapidFuzz vendor resolution\nOFAC sanctions & duplicate check]
+    SENTINEL --> ROUTE_RISK{route_after_risk_sentinel\nSanctions cleared?}
+    ROUTE_RISK -->|Sanctioned or Fraud| FREEZE[END: Compliance Freeze]
+    ROUTE_RISK -->|Clean| STRUCTURER[Node 3: Capital Deal Structurer\nXGBoost elasticity curve P>=65%\nFastMCP FASB ASC 310 math solver]
+    STRUCTURER --> VALIDATOR[Node 4: Guardrail Validator\nCredit facility headroom check\n15% single-supplier concentration\n64-char SHA256 audit digest]
+    VALIDATOR --> ROUTE_GUARD{route_after_guardrails\nPre-flight approved?}
+    ROUTE_GUARD -->|Limit Breached| HALT[END: Credit Cap Breach]
+    ROUTE_GUARD -->|Approved| DISPATCHER[Node 5: Treasury Dispatcher\n32-char token & 48h expiry\n1-click dual execution payload]
+    DISPATCHER --> FINISHED([END: Dispatched to Treasury])
 ```
 
 ---
@@ -433,53 +423,75 @@ substitutions:
 
 Every piece of functionality is written alongside a dedicated, concrete test suite. No code is merged without passing tests:
 
-| Module | Test File | Test Cases & Assertions |
-| :--- | :--- | :--- |
-| **Normalizer** | `tests/test_normalizer.py` | • Fuzzy match `"Reliance Ind."`, `"RELIANCE IND LTD"` -> Canonical ID.<br>• Parse `"2/10 Net 60"` -> `discount=2.0, days=10, net=60`.<br>• Parse `"Net 90"`, `"1.5/15 Net 45"`.<br>• Detect duplicate invoice hash in active ledger. |
-| **Math Solver** | `tests/test_math_solver.py` | • Dynamic discount calculation matching hand-calculated financial tables.<br>• ACT/360 vs ACT/365 day-count convention comparison.<br>• Reverse factoring spread: bank NIM, supplier net advance, buyer rebate.<br>• Zero tenor and negative days error handling. |
-| **Guardrails** | `tests/test_guardrails.py` | • Pass when facility limit has sufficient undrawn headroom.<br>• Fail with specific reason when proposed amount exceeds limit.<br>• Fail when single-supplier concentration exceeds 15% threshold.<br>• Block transactions involving entities on OFAC/sanctions watchlist. |
-| **XGBoost ML** | `tests/test_acceptance_ml.py` | • Verify acceptance probability is monotonically decreasing with higher discount rates.<br>• Assert inference latency < 15ms.<br>• Handle unseen categorical risk tiers gracefully. |
-| **LangGraph Graph** | `tests/test_orchestrator.py` | • End-to-end execution from raw invoice to dispatched payload.<br>• Routing to Dynamic Discounting when buyer cash is abundant.<br>• Routing to Reverse Factoring when buyer cash is constrained.<br>• Gating and halt on guardrail rejection. |
-| **FastAPI Gateway** | `tests/test_api_routes.py` | • Webhook invoice ingestion response validation.<br>• SSE event streaming endpoint connectivity and event serialization.<br>• One-click action approval and rejection state transitions. |
+| Module / Layer | Test File | Test Count | Test Cases & Assertions | Status |
+| :--- | :--- | :---: | :--- | :---: |
+| **Normalizer** | `tests/test_normalizer.py` | 22 tests | • RapidFuzz canonical matching (`"Reliance Ind."` -> `"Reliance Industries Ltd."`)<br>• Regex payment terms parsing (`"2/10 Net 60"`, `"1.5/15 Net 45"`, `"Net 90"`, `"EOM+30"`)<br>• SHA256 idempotency duplicate receivables detection<br>• Standalone container embedded seed vendor master fallback | ✅ PASSED |
+| **Math Solver** | `tests/test_math_solver.py` | 19 tests | • FASB ASC 310 ACT/360 & ACT/365 Dynamic Discounting exact decimal calculations<br>• Reverse factoring spread: bank NIM, supplier net advance, buyer rebate<br>• Arbitrage-grade penny precision avoiding IEEE 754 float drift<br>• Hurdle rate threshold validation and tenor error handling | ✅ PASSED |
+| **Guardrails** | `tests/test_guardrails.py` | 23 tests | • Corporate revolving credit line facility headroom verification<br>• 15% single-supplier concentration limit enforcement<br>• OFAC / sanctions watchlist blocking<br>• Deterministic 64-character SHA256 cryptographic audit signature generation | ✅ PASSED |
+| **Dataset Generator** | `tests/test_dataset_generator.py` | 14 tests | • 50,000 synthetic invoice generation with microeconomic utility pricing<br>• Realistic buyer facilities ($150M limit), vendor master, and cash ledgers<br>• Multi-format export (CSV + JSON) matching Kaggle / HuggingFace standards | ✅ PASSED |
+| **XGBoost ML** | `tests/test_acceptance_ml.py` | 11 tests | • In-pipeline model training & ROC-AUC >= 0.70 quality gate (actual: 0.7392)<br>• Monotonic price elasticity curve verification (acceptance decreases as APR increases)<br>• Sub-15ms inference latency gate (actual: < 5ms)<br>• Self-healing model loader with automatic GCS remote download | ✅ PASSED |
+| **FastMCP Server** | `tests/test_mcp_server.py` | 6 tests | • Contract verification for all 6 FastMCP exposed tools<br>• Pydantic schema validation across stdio and SSE transport interfaces | ✅ PASSED |
+| **Graph State** | `tests/test_state.py` | 3 tests | • TypedDict `SCFGraphState` schema immutability<br>• `Annotated[list[str], operator.add]` audit trail reducer verification<br>• Enum state transitions (`WorkflowStatus`, `FinancingInstrument`) | ✅ PASSED |
+| **Cash Forecaster** | `tests/test_cash_forecaster.py` | 3 tests | • 60-day cash curve forecasting against $10M corporate floor<br>• Automatic recommendation of Dynamic Discounting (cash rich) vs Reverse Factoring (cash lean) | ✅ PASSED |
+| **Risk Sentinel** | `tests/test_risk_sentinel.py` | 3 tests | • RapidFuzz vendor alias resolution and risk tier assignment<br>• OFAC watchlist sanctions blocking with immediate workflow halt<br>• Duplicate receivable detection flagging | ✅ PASSED |
+| **Capital Structurer** | `tests/test_capital_structurer.py` | 2 tests | • XGBoost price elasticity curve generation across 5–10 candidate APR points<br>• Optimal win-win discount selection ($P \ge 65\%$ acceptance rate)<br>• Decimal math solver term sheet structuring | ✅ PASSED |
+| **Guardrail Validator** | `tests/test_guardrail_validator.py` | 3 tests | • Pre-flight credit limit & 15% concentration cap validation<br>• Rejection halting on credit facility overdraw<br>• 64-char SHA256 audit digest generation | ✅ PASSED |
+| **Treasury Dispatcher** | `tests/test_treasury_dispatcher.py` | 3 tests | • 32-character secure approval token generation<br>• 48-hour term sheet expiration timestamping<br>• 1-click dual-execution payload formatting for ERP webhooks | ✅ PASSED |
+| **LangGraph E2E Graph** | `tests/test_graph.py` | 3 tests | • Full 5-node happy path traversal from raw ERP invoice to dispatched payload<br>• Compliance short-circuit: sanctions hit halts at Node 2 without calling downstream nodes<br>• Credit breach short-circuit: credit overdraw halts at Node 4 before treasury dispatch | ✅ PASSED |
+| **TOTAL** | **13 Test Suites** | **115 Tests** | **100% Green across all financial, ML, tool, and agentic workflows** | **✅ 100% PASSING** |
 
 ---
 
-## 10. Phased Execution Roadmap
+## 10. Phased Execution Roadmap & Implementation Status
 
 ```
-  Phase 1: Foundation, MCP Server & Unit Tests (TDD)
-  ├── Setup monorepo structure: apps/api, apps/web, packages/mcp_server, packages/orchestrator
-  ├── Implement packages/mcp_server/modules/normalizer.py + tests/test_normalizer.py
-  ├── Implement packages/mcp_server/modules/math_solver.py + tests/test_math_solver.py
-  ├── Implement packages/mcp_server/modules/guardrails.py + tests/test_guardrails.py
-  └── Expose FastMCP server (server.py) with stdio & SSE transports
+  [x] Phase 1: Foundation, FastMCP Server & Financial Math Engine (COMPLETED)
+  ├── Monorepo workspace configuration via pyproject.toml & uv
+  ├── Module A: packages/mcp_server/modules/normalizer.py + tests/test_normalizer.py (22 tests)
+  ├── Module B: packages/mcp_server/modules/math_solver.py + tests/test_math_solver.py (19 tests)
+  ├── Module C: packages/mcp_server/modules/guardrails.py + tests/test_guardrails.py (23 tests)
+  └── FastMCP Server: packages/mcp_server/server.py + tests/test_mcp_server.py (6 tests)
          │
          ▼
-  Phase 2: Hybrid ML Module & Synthetic Dataset
-  ├── Build synthetic historical trade dataset generator (dataset_generator.py)
-  ├── Train XGBoost acceptance model (acceptance_model.py)
-  └── Write tests/test_acceptance_ml.py
+  [x] Phase 2: Hybrid ML Module & GCS Remote Data Lake (COMPLETED)
+  ├── Synthetic Trade Dataset: packages/orchestrator/ml/dataset_generator.py (50k rows, 14 tests)
+  ├── GCS Remote Data Lake Sync: packages/orchestrator/ml/gcs_uploader.py (5 remote datasets)
+  ├── XGBoost Supplier Acceptance Model: packages/orchestrator/ml/acceptance_model.py (11 tests)
+  │   └── Quality Gate: ROC-AUC 0.7392 (>= 0.70), Monotonicity, <5ms Latency (<15ms)
+  └── DATASET_CARD.md published with microeconomic utility pricing documentation
          │
          ▼
-  Phase 3: Multi-Agent Orchestrator (LangGraph)
-  ├── Define strict Pydantic A2A state schema (state.py)
-  ├── Implement agent nodes (Cash Forecaster, Risk Sentinel, Deal Structurer, Dispatcher)
-  ├── Build LangGraph state machine with conditional routing and pre-flight gates
-  └── Write tests/test_orchestrator.py
+  [x] Phase 3: Autonomous Multi-Agent Orchestrator (LangGraph) (COMPLETED)
+  ├── Central State: packages/orchestrator/state.py (SCFGraphState + operator.add reducers, 3 tests)
+  ├── Agent Node 1: packages/orchestrator/nodes/cash_forecaster.py (3 tests)
+  ├── Agent Node 2: packages/orchestrator/nodes/risk_sentinel.py (3 tests)
+  ├── Agent Node 3: packages/orchestrator/nodes/capital_structurer.py (2 tests)
+  ├── Agent Node 4: packages/orchestrator/nodes/guardrail_validator.py (3 tests)
+  ├── Agent Node 5: packages/orchestrator/nodes/treasury_dispatcher.py (3 tests)
+  ├── Master State Machine: packages/orchestrator/graph.py (Conditional routing & branching)
+  └── End-to-End Integration Suite: tests/test_graph.py (3 tests: happy path, sanctions, overdraw)
          │
          ▼
-  Phase 4: FastAPI Gateway & TypeScript Web UI
-  ├── Build apps/api with REST endpoints and SSE streaming (/api/stream)
-  ├── Build apps/web Next.js UI:
-  │   ├── Invoice Feed & Simulation Trigger
-  │   ├── 60-Day Cash Flow & Headroom Chart
-  │   ├── Live Agent Reasoning Telemetry Console (SSE)
-  │   └── One-Click Dual-Approval Cockpit Card
+  [x] GCP Cloud Build CI/CD Pipeline (4-Stage Strict Quality Gate) (COMPLETED)
+  ├── Stage 1: Pre-Training Financial Math & Unit Tests (78 tests)
+  ├── Stage 2: In-Pipeline XGBoost Training on GCP with GCS Model Sync
+  ├── Stage 3: ML Quality Gate (ROC-AUC >= 0.70, latency, monotonicity) & MCP Contracts (17 tests)
+  └── Stage 4: Multi-Agent LangGraph Orchestrator Quality Gate (20 tests)
+         │
+         ▼
+  [ ] Phase 4: FastAPI Gateway & Server-Sent Events (SSE) Streaming (NEXT)
+  ├── Build apps/api with REST endpoints (POST /api/invoices/process)
+  ├── Build SSE real-time streaming endpoint (GET /api/invoices/{id}/stream)
+  ├── One-click dual-approval execution handler (POST /api/offers/{id}/approve)
   └── Write tests/test_api_routes.py
          │
          ▼
-  Phase 5: GCP Cloud Build & Cloud Run Deployment
-  ├── Create Dockerfile.api & Dockerfile.web
-  ├── Write cloudbuild.yaml multi-step CI/CD pipeline
-  └── Verify zero-downtime deployment on Google Cloud Run
+  [ ] Phase 5: TypeScript Next.js Treasury Cockpit & Cloud Run Deployment (PLANNED)
+  ├── Next.js 14 App Router UI (apps/web):
+  │   ├── ERP Ingestion Feed & Live Simulation Trigger (InvoiceFeed.tsx)
+  │   ├── Interactive 60-Day Cash Flow & Headroom Chart (CashFlowChart.tsx)
+  │   ├── Live Multi-Agent Reasoning Telemetry Console via SSE (AgentTelemetry.tsx)
+  │   └── 1-Click Dual-Approval Cockpit Card (OneClickCard.tsx)
+  ├── Production Multi-Stage Dockerfile (apps/api & apps/web)
+  └── Zero-downtime deployment to Google Cloud Run
 ```
