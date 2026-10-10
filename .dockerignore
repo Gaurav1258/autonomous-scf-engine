@@ -1,0 +1,32 @@
+# Version control
+.git
+.gitignore
+
+# Data & Models (streamed or downloaded from GCS)
+data/
+datasets/
+*.csv
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node.js & Next.js (installed cleanly inside container)
+node_modules/
+apps/web/node_modules/
+apps/web/.next/
+apps/web/out/
+npm-debug.log*
+
+# OS & Environment
+.env
+.env.*
+.DS_Store
+Thumbs.db
+
