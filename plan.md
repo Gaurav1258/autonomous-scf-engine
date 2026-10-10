@@ -173,17 +173,17 @@ def calculate_dynamic_discount(
     ...
 ```
 - **Financial Math Logic:**
-  - Let $F = \text{invoice\_amount}$, $D_{\text{acc}} = \text{days\_accelerated}$, $N = \text{total\_tenor\_days}$.
+  - Let $F = \text{Invoice Amount}$, $D_{\text{acc}} = \text{Accelerated Days}$, $N = \text{Total Tenor Days}$.
   - Basis $B = 360 \text{ or } 365$.
   - Dynamic Sliding Scale Discount Rate:
-    $$d = \text{baseline\_discount\_pct} \times \left( \frac{D_{\text{acc}}}{N} \right)$$
+    $$d = d_{\text{baseline}} \times \left( \frac{D_{\text{acc}}}{N} \right)$$
   - Absolute Discount Amount:
     $$\Delta = F \times \left( \frac{d}{100} \right)$$
   - Net Supplier Advance:
     $$\text{Payout} = F - \Delta$$
   - Effective Annualized Percentage Rate (APR) earned by Buyer:
     $$\text{APR}_{\text{buyer}} = \left( \frac{\Delta}{\text{Payout}} \right) \times \left( \frac{B}{D_{\text{acc}}} \right)$$
-  - Buyer Hurdle Check: Validates if $\text{APR}_{\text{buyer}} \ge \text{buyer\_hurdle\_rate\_apr}$.
+  - Buyer Hurdle Check: Validates if $\text{APR}_{\text{buyer}} \ge \text{Hurdle Rate APR}$.
 
 #### Tool B.2: `simulate_reverse_factoring_spread`
 ```python
@@ -200,15 +200,16 @@ def simulate_reverse_factoring_spread(
 ```
 - **Financial Math Logic:**
   - All-in Financing Rate:
-    $$r_{\text{all-in}} = \text{base\_benchmark\_rate} + \text{bank\_margin\_spread} + \text{platform\_fee\_pct}$$
+    $$r_{\text{all-in}} = r_{\text{base}} + r_{\text{margin}} + r_{\text{fee}}$$
+    where $r_{\text{base}}$ is benchmark SOFR rate, $r_{\text{margin}}$ is bank margin spread, and $r_{\text{fee}}$ is platform fee.
   - Supplier Cost of Financing:
     $$C_{\text{supplier}} = F \times r_{\text{all-in}} \times \left( \frac{D_{\text{acc}}}{360} \right)$$
   - Net Supplier Payout:
     $$\text{Payout} = F - C_{\text{supplier}}$$
   - Bank Gross Interest Income:
-    $$\text{Bank Revenue} = F \times (\text{base\_benchmark\_rate} + \text{bank\_margin\_spread}) \times \left( \frac{D_{\text{acc}}}{360} \right)$$
+    $$\text{Bank Revenue} = F \times (r_{\text{base}} + r_{\text{margin}}) \times \left( \frac{D_{\text{acc}}}{360} \right)$$
   - Corporate Buyer Rebate (Working Capital Yield):
-    $$\text{Buyer Rebate} = F \times (\text{bank\_margin\_spread} \times \text{buyer\_rebate\_share\_pct}) \times \left( \frac{D_{\text{acc}}}{360} \right)$$
+    $$\text{Buyer Rebate} = F \times (r_{\text{margin}} \times \text{Rebate Share \%}) \times \left( \frac{D_{\text{acc}}}{360} \right)$$
 
 ---
 
@@ -229,8 +230,8 @@ def simulate_reverse_factoring_spread(
       ...
   ```
 - **Validation Rules:**
-  1. **Facility Capacity:** $\text{facility\_drawn} + \text{proposed\_amount} \le \text{facility\_limit}$.
-  2. **Concentration Limit:** $(\text{existing\_supplier\_exposure} + \text{proposed\_amount}) \le \text{facility\_limit} \times (\text{single\_supplier\_concentration\_cap\_pct} / 100)$.
+  1. **Facility Capacity:** $\text{Facility Drawn} + \text{Proposed Amount} \le \text{Facility Limit}$.
+  2. **Concentration Limit:** $(\text{Supplier Exposure} + \text{Proposed Amount}) \le \text{Facility Limit} \times \left(\frac{\text{Concentration Cap \%}}{100}\right)$.
   3. **Risk Tier & Watchlist:** Supplier not present on OFAC, PEP, or internal default registries.
   4. **Output:** Cryptographically verifiable boolean pass/fail with exact breach reasoning if rejected.
 
@@ -410,7 +411,7 @@ substitutions:
    Standard IEEE 754 floating-point math (`0.1 + 0.2 = 0.30000000000000004`) causes reconciliation drift. For corporate credit lines in the tens of millions, currency amounts must be handled using `decimal.Decimal` (or rounded integer cents).
 3. **Idempotency & Double-Financing Locking:**  
    Every invoice processing run generates an idempotency key:
-   $$\text{IdempotencyKey} = \text{SHA256}(\text{buyer\_id} + \text{supplier\_canonical\_id} + \text{invoice\_number} + \text{amount})$$
+   $$\text{IdempotencyKey} = \text{SHA256}(\text{Buyer ID} + \text{Supplier ID} + \text{Invoice Number} + \text{Amount})$$
    Network retries or re-fired webhooks must never trigger duplicate draws against the bank credit facility.
 4. **Streaming Telemetry (Preventing the "Frozen Spinner" UX):**  
    A multi-agent system takes 5–15 seconds to run through normalization, forecasting, ML scoring, math, and synthesis. If the TypeScript UI simply displays a blank loading spinner, the app feels unresponsive. We stream real-time agent steps and thoughts to the UI via Server-Sent Events (SSE).
