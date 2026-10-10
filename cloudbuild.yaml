@@ -137,10 +137,19 @@ steps:
       - '.'
 
   # ---------------------------------------------------------------------------
-  # Step 6: Deploy to Google Cloud Run
+  # Step 6: Push Container Image to Artifact Registry
+  # ---------------------------------------------------------------------------
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'stage-6-push-container-image'
+    args:
+      - 'push'
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/scf-api:latest'
+
+  # ---------------------------------------------------------------------------
+  # Step 7: Deploy to Google Cloud Run
   # ---------------------------------------------------------------------------
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    id: 'stage-6-deploy-to-cloud-run'
+    id: 'stage-7-deploy-to-cloud-run'
     entrypoint: 'gcloud'
     args:
       - 'run'
@@ -149,6 +158,7 @@ steps:
       - '--image=$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/scf-api:latest'
       - '--region=$_REGION'
       - '--platform=managed'
+      - '--memory=1Gi'
       - '--allow-unauthenticated'
       - '--set-env-vars=GCP_PROJECT_ID=$PROJECT_ID,GCS_BUCKET_NAME=$PROJECT_ID$_BUCKET_SUFFIX,GCP_REGION=$_REGION,ENVIRONMENT=production'
 
