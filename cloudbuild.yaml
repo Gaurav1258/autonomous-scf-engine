@@ -2,7 +2,7 @@
 # Google Cloud Build CI/CD Pipeline
 # Autonomous Supply Chain Finance & Working Capital Floating Engine
 # =============================================================================
-# Strict 3-Stage Quality Gate Architecture:
+# Strict 4-Stage Quality Gate Architecture:
 #
 # Stage 1: Pre-Training Unit & Financial Math Gate
 #          Runs all unit tests (math solver, normalizer, guardrails, dataset).
@@ -17,6 +17,11 @@
 #          Verifies newly trained model satisfies ROC-AUC >= 0.70, monotonicity,
 #          sub-15ms latency, and FastMCP tool contracts.
 #          FAILS THE BUILD if model quality degrades.
+#
+# Stage 4: Multi-Agent LangGraph Orchestrator Quality Gate
+#          Verifies the 5 autonomous agents (forecaster, sentinel, structurer,
+#          guardrail, dispatcher) and end-to-end conditional state machine workflows.
+#          FAILS THE BUILD if any multi-agent contract or routing path fails.
 # =============================================================================
 
 steps:
@@ -88,6 +93,28 @@ steps:
         pip install --no-cache-dir uv
         uv run pytest tests/test_acceptance_ml.py tests/test_mcp_server.py -v --tb=short
         echo ">>> STAGE 3 PASSED: ROC-AUC, latency, price elasticity & MCP contracts verified."
+
+  # ---------------------------------------------------------------------------
+  # Step 4: Multi-Agent LangGraph Orchestrator Quality Gate
+  # ---------------------------------------------------------------------------
+  - name: 'python:3.11-slim'
+    id: 'stage-4-langgraph-orchestrator-quality-gate'
+    entrypoint: 'bash'
+    env:
+      - 'GCP_PROJECT_ID=$PROJECT_ID'
+      - 'GCS_BUCKET_NAME=$PROJECT_ID$_BUCKET_SUFFIX'
+      - 'GCP_REGION=$_REGION'
+    args:
+      - '-c'
+      - |
+        set -e
+        export PYTHONPATH=.
+        echo "============================================================"
+        echo "STAGE 4: VERIFYING MULTI-AGENT LANGGRAPH STATE MACHINE"
+        echo "============================================================"
+        pip install --no-cache-dir uv
+        uv run pytest tests/test_state.py tests/test_cash_forecaster.py tests/test_risk_sentinel.py tests/test_capital_structurer.py tests/test_guardrail_validator.py tests/test_treasury_dispatcher.py tests/test_graph.py -v --tb=short
+        echo ">>> STAGE 4 PASSED: Multi-Agent LangGraph workflows verified."
 
 # -----------------------------------------------------------------------------
 # Parameterized Substitutions (Zero Hardcoded Private Information)
