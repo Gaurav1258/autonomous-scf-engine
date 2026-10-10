@@ -439,7 +439,8 @@ Every piece of functionality is written alongside a dedicated, concrete test sui
 | **Guardrail Validator** | `tests/test_guardrail_validator.py` | 3 tests | • Pre-flight credit limit & 15% concentration cap validation<br>• Rejection halting on credit facility overdraw<br>• 64-char SHA256 audit digest generation | ✅ PASSED |
 | **Treasury Dispatcher** | `tests/test_treasury_dispatcher.py` | 3 tests | • 32-character secure approval token generation<br>• 48-hour term sheet expiration timestamping<br>• 1-click dual-execution payload formatting for ERP webhooks | ✅ PASSED |
 | **LangGraph E2E Graph** | `tests/test_graph.py` | 3 tests | • Full 5-node happy path traversal from raw ERP invoice to dispatched payload<br>• Compliance short-circuit: sanctions hit halts at Node 2 without calling downstream nodes<br>• Credit breach short-circuit: credit overdraw halts at Node 4 before treasury dispatch | ✅ PASSED |
-| **TOTAL** | **13 Test Suites** | **115 Tests** | **100% Green across all financial, ML, tool, and agentic workflows** | **✅ 100% PASSING** |
+| **FastAPI Gateway** | `tests/test_api_routes.py` | 7 tests | • REST `/api/invoices/process` synchronous multi-agent execution<br>• Real-time SSE telemetry streaming via `/api/stream/invoice/{id}`<br>• 1-click dual-approval execution and core banking reference generation<br>• 60-day cash curve trajectory visualizer data endpoint | ✅ PASSED |
+| **TOTAL** | **14 Test Suites** | **122 Tests** | **100% Green across all financial, ML, tool, agentic, and API workflows** | **✅ 100% PASSING** |
 
 ---
 
@@ -473,21 +474,24 @@ Every piece of functionality is written alongside a dedicated, concrete test sui
   └── End-to-End Integration Suite: tests/test_graph.py (3 tests: happy path, sanctions, overdraw)
          │
          ▼
+  [x] Phase 4: FastAPI Gateway & Server-Sent Events (SSE) Streaming (COMPLETED)
+  ├── REST Ingestion & Processing: apps/api/routes/invoices.py (POST /api/invoices/process)
+  ├── Real-Time SSE Telemetry Stream: apps/api/routes/stream.py (GET /api/stream/invoice/{id})
+  ├── 1-Click Dual Approval Execution: apps/api/routes/actions.py (POST /api/offers/{id}/action)
+  ├── 60-Day Cash Trajectory Visualizer: apps/api/routes/forecast.py (GET /api/forecast/cash-curve)
+  ├── State Repository & LangGraph Singleton: apps/api/dependencies.py
+  ├── Main Application Entrypoint: apps/api/main.py (CORS, /health, /docs)
+  └── Integration Test Suite: tests/test_api_routes.py (7 tests)
+         │
+         ▼
   [x] GCP Cloud Build CI/CD Pipeline (4-Stage Strict Quality Gate) (COMPLETED)
   ├── Stage 1: Pre-Training Financial Math & Unit Tests (78 tests)
   ├── Stage 2: In-Pipeline XGBoost Training on GCP with GCS Model Sync
   ├── Stage 3: ML Quality Gate (ROC-AUC >= 0.70, latency, monotonicity) & MCP Contracts (17 tests)
-  └── Stage 4: Multi-Agent LangGraph Orchestrator Quality Gate (20 tests)
+  └── Stage 4: Multi-Agent LangGraph & FastAPI Gateway Quality Gate (27 tests)
          │
          ▼
-  [ ] Phase 4: FastAPI Gateway & Server-Sent Events (SSE) Streaming (NEXT)
-  ├── Build apps/api with REST endpoints (POST /api/invoices/process)
-  ├── Build SSE real-time streaming endpoint (GET /api/invoices/{id}/stream)
-  ├── One-click dual-approval execution handler (POST /api/offers/{id}/approve)
-  └── Write tests/test_api_routes.py
-         │
-         ▼
-  [ ] Phase 5: TypeScript Next.js Treasury Cockpit & Cloud Run Deployment (PLANNED)
+  [ ] Phase 5: TypeScript Next.js Treasury Cockpit & Cloud Run Deployment (NEXT UP)
   ├── Next.js 14 App Router UI (apps/web):
   │   ├── ERP Ingestion Feed & Live Simulation Trigger (InvoiceFeed.tsx)
   │   ├── Interactive 60-Day Cash Flow & Headroom Chart (CashFlowChart.tsx)

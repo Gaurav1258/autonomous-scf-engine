@@ -2,7 +2,7 @@
 # Google Cloud Build CI/CD Pipeline
 # Autonomous Supply Chain Finance & Working Capital Floating Engine
 # =============================================================================
-# Strict 4-Stage Quality Gate Architecture:
+# Strict 6-Stage CI/CD & Cloud Run Deployment Architecture:
 #
 # Stage 1: Pre-Training Unit & Financial Math Gate
 #          Runs all unit tests (math solver, normalizer, guardrails, dataset).
@@ -18,10 +18,17 @@
 #          sub-15ms latency, and FastMCP tool contracts.
 #          FAILS THE BUILD if model quality degrades.
 #
-# Stage 4: Multi-Agent LangGraph Orchestrator Quality Gate
-#          Verifies the 5 autonomous agents (forecaster, sentinel, structurer,
-#          guardrail, dispatcher) and end-to-end conditional state machine workflows.
+# Stage 4: Multi-Agent LangGraph Orchestrator & FastAPI Gateway Gate
+#          Verifies the 5 autonomous agents, end-to-end conditional state machine
+#          workflows, REST endpoints, and SSE telemetry streaming.
 #          FAILS THE BUILD if any multi-agent contract or routing path fails.
+#
+# Stage 5: Container Build & Push to Artifact Registry
+#          Builds production Docker container with uv and pushes to GCP Artifact Registry.
+#
+# Stage 6: Continuous Deployment to Google Cloud Run
+#          Deploys the container to Cloud Run with zero downtime, health probes,
+#          and auto-scaling enabled.
 # =============================================================================
 
 steps:
@@ -113,8 +120,41 @@ steps:
         echo "STAGE 4: VERIFYING MULTI-AGENT LANGGRAPH STATE MACHINE"
         echo "============================================================"
         pip install --no-cache-dir uv
-        uv run pytest tests/test_state.py tests/test_cash_forecaster.py tests/test_risk_sentinel.py tests/test_capital_structurer.py tests/test_guardrail_validator.py tests/test_treasury_dispatcher.py tests/test_graph.py -v --tb=short
-        echo ">>> STAGE 4 PASSED: Multi-Agent LangGraph workflows verified."
+        uv run pytest tests/test_state.py tests/test_cash_forecaster.py tests/test_risk_sentinel.py tests/test_capital_structurer.py tests/test_guardrail_validator.py tests/test_treasury_dispatcher.py tests/test_graph.py tests/test_api_routes.py -v --tb=short
+        echo ">>> STAGE 4 PASSED: Multi-Agent LangGraph workflows & FastAPI Gateway verified."
+
+  # ---------------------------------------------------------------------------
+  # Step 5: Build Container Image for Cloud Run
+  # ---------------------------------------------------------------------------
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'stage-5-build-container-image'
+    args:
+      - 'build'
+      - '-t'
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/scf-api:latest'
+      - '-f'
+      - 'Dockerfile'
+      - '.'
+
+  # ---------------------------------------------------------------------------
+  # Step 6: Deploy to Google Cloud Run
+  # ---------------------------------------------------------------------------
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'stage-6-deploy-to-cloud-run'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'scf-api'
+      - '--image=$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/scf-api:latest'
+      - '--region=$_REGION'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--set-env-vars=GCP_PROJECT_ID=$PROJECT_ID,GCS_BUCKET_NAME=$PROJECT_ID$_BUCKET_SUFFIX,GCP_REGION=$_REGION,ENVIRONMENT=production'
+
+# Push built images to Artifact Registry
+images:
+  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/scf-api:latest'
 
 # -----------------------------------------------------------------------------
 # Parameterized Substitutions (Zero Hardcoded Private Information)
@@ -122,6 +162,7 @@ steps:
 substitutions:
   _BUCKET_SUFFIX: '-scf-data'
   _REGION: 'us-central1'
+  _REPO_NAME: 'scf-repo'
 
 options:
   logging: CLOUD_LOGGING_ONLY

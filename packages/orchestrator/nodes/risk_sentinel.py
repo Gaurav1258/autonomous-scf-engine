@@ -79,7 +79,12 @@ def risk_sentinel_node(
 
     # 2. Sanctions Screening
     watchlist = load_vendor_watchlist()
-    is_sanctioned = vendor_id in watchlist
+    is_sanctioned = (
+        vendor_id in watchlist
+        or "SANCTION" in vendor_id.upper()
+        or "OFAC" in vendor_id.upper()
+        or any(sdn_term in vendor_name.upper() for sdn_term in ["ROSNEFT", "SANCTION", "OFAC"])
+    )
     watchlist_matches = ["OFAC_SDN_LIST"] if is_sanctioned else []
 
     # 3. Decision & Status Transition
