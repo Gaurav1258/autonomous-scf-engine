@@ -146,10 +146,10 @@ steps:
       - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/scf-api:latest'
 
   # ---------------------------------------------------------------------------
-  # Step 7: Deploy to Google Cloud Run
+  # Step 7: Deploy API to Google Cloud Run
   # ---------------------------------------------------------------------------
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    id: 'stage-7-deploy-to-cloud-run'
+    id: 'stage-7-deploy-api-to-cloud-run'
     entrypoint: 'gcloud'
     args:
       - 'run'
@@ -162,9 +162,49 @@ steps:
       - '--allow-unauthenticated'
       - '--set-env-vars=GCP_PROJECT_ID=$PROJECT_ID,GCS_BUCKET_NAME=$PROJECT_ID$_BUCKET_SUFFIX,GCP_REGION=$_REGION,ENVIRONMENT=production'
 
+  # ---------------------------------------------------------------------------
+  # Step 8: Build Frontend Container Image (Next.js)
+  # ---------------------------------------------------------------------------
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'stage-8-build-web-image'
+    args:
+      - 'build'
+      - '-t'
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/scf-web:latest'
+      - '-f'
+      - 'apps/web/Dockerfile.web'
+      - '.'
+
+  # ---------------------------------------------------------------------------
+  # Step 9: Push Frontend Container Image to Artifact Registry
+  # ---------------------------------------------------------------------------
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'stage-9-push-web-image'
+    args:
+      - 'push'
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/scf-web:latest'
+
+  # ---------------------------------------------------------------------------
+  # Step 10: Deploy Frontend to Google Cloud Run (scf-web)
+  # ---------------------------------------------------------------------------
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'stage-10-deploy-web-to-cloud-run'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'scf-web'
+      - '--image=$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/scf-web:latest'
+      - '--region=$_REGION'
+      - '--platform=managed'
+      - '--memory=512Mi'
+      - '--port=3000'
+      - '--allow-unauthenticated'
+
 # Push built images to Artifact Registry
 images:
   - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/scf-api:latest'
+  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/scf-web:latest'
 
 # -----------------------------------------------------------------------------
 # Parameterized Substitutions (Zero Hardcoded Private Information)
