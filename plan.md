@@ -491,12 +491,14 @@ Every piece of functionality is written alongside a dedicated, concrete test sui
   └── Stage 4: Multi-Agent LangGraph & FastAPI Gateway Quality Gate (27 tests)
          │
          ▼
-  [ ] Phase 5: TypeScript Next.js Treasury Cockpit & Cloud Run Deployment (NEXT UP)
+  [x] Phase 5: TypeScript Next.js Treasury Cockpit & Frontend Container (COMPLETED)
   ├── Next.js 14 App Router UI (apps/web):
-  │   ├── ERP Ingestion Feed & Live Simulation Trigger (InvoiceFeed.tsx)
-  │   ├── Interactive 60-Day Cash Flow & Headroom Chart (CashFlowChart.tsx)
-  │   ├── Live Multi-Agent Reasoning Telemetry Console via SSE (AgentTelemetry.tsx)
-  │   └── 1-Click Dual-Approval Cockpit Card (OneClickCard.tsx)
-  ├── Production Multi-Stage Dockerfile (apps/api & apps/web)
-  └── Zero-downtime deployment to Google Cloud Run
+  │   ├── ERP Ingestion Feed & Live Simulation Trigger (src/components/InvoiceFeed.tsx)
+  │   ├── Interactive 60-Day Cash Flow & Headroom Chart (src/components/CashFlowChart.tsx)
+  │   ├── Live Multi-Agent Reasoning Telemetry Console via SSE (src/components/AgentTelemetry.tsx)
+  │   ├── 1-Click Dual-Approval Cockpit Card (src/components/OneClickCard.tsx)
+  │   ├── Typed API Client & Cloud Run Integration (src/lib/api-client.ts)
+  │   └── Master Treasury Cockpit Layout & Dashboard (src/app/page.tsx, layout.tsx)
+  ├── Production Multi-Stage Standalone Dockerfile (apps/web/Dockerfile.web)
+  └── Verified 100% clean production build (`npm run build`)
 ```
