@@ -130,7 +130,11 @@ def _build_agent_telemetry_summary(node_name: str, updates: dict[str, Any]) -> s
         return f"Risk Sentinel resolved Golden Record '{vendor}'. Sanctions verified clean."
     elif node_name == "capital_structurer":
         st = updates.get("optimal_structure")
-        apr = getattr(st, "selected_annualized_rate_pct", 0.0) if st else 0.0
+        apr = (
+            getattr(st, "implied_apr_pct", None)
+            or getattr(st, "selected_annualized_rate_pct", None)
+            or 0.0
+        ) if st else 0.0
         payout = getattr(st, "net_advance_to_supplier_usd", 0.0) if st else 0.0
         return f"Structurer optimized ML elasticity curve: Selected {apr:.2f}% APR, net payout ${payout:,.2f}."
     elif node_name == "guardrail_validator":

@@ -101,7 +101,10 @@ def list_invoices(
                 "vendor": r.state.get("risk_profile", {}).get("vendor_canonical_name") if isinstance(r.state.get("risk_profile"), dict) else None,
                 "amount": r.state.get("raw_invoice", {}).get("invoice_amount"),
                 "instrument": r.state.get("optimal_structure", {}).get("instrument_type") if isinstance(r.state.get("optimal_structure"), dict) else None,
-                "apr": r.state.get("optimal_structure", {}).get("selected_annualized_rate_pct") if isinstance(r.state.get("optimal_structure"), dict) else None,
+                "apr": (
+                    r.state.get("optimal_structure", {}).get("implied_apr_pct")
+                    or r.state.get("optimal_structure", {}).get("selected_annualized_rate_pct")
+                ) if isinstance(r.state.get("optimal_structure"), dict) else None,
             },
         }
         for r in records

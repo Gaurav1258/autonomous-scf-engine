@@ -117,6 +117,7 @@ class FinalExecutionPayload(BaseModel):
     annualized_apr_pct: float
     days_accelerated: int
     expiry_timestamp_utc: str
+    expires_at_timestamp: Optional[float] = None
     approval_token: str
     treasurer_action_url: str
     supplier_portal_url: str

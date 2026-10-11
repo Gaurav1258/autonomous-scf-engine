@@ -104,9 +104,12 @@ export function OneClickCard({ state, onActionComplete }: OneClickCardProps) {
           </div>
 
           {/* Expiry Pill */}
-          {final_payload?.expires_at_timestamp && (
+          {(final_payload?.expires_at_timestamp || final_payload?.expiry_timestamp_utc) && (
             <span className="rounded-full border border-amber-500/30 bg-amber-950/40 px-2.5 py-0.5 text-[11px] font-mono text-amber-300">
-              ⏳ {formatExpiryCountdown(final_payload.expires_at_timestamp)}
+              ⏳ {formatExpiryCountdown(
+                final_payload.expires_at_timestamp ||
+                (final_payload.expiry_timestamp_utc ? new Date(final_payload.expiry_timestamp_utc).getTime() / 1000 : null)
+              )}
             </span>
           )}
         </div>
@@ -118,7 +121,7 @@ export function OneClickCard({ state, onActionComplete }: OneClickCardProps) {
           <div className="rounded-lg border border-slate-800 bg-[#090e1a] p-3">
             <span className="text-[10px] uppercase tracking-wider text-slate-400">Net Supplier Advance</span>
             <div className="mt-1 text-base font-bold text-emerald-400 font-mono">
-              {formatCurrency(optimal_structure?.net_advance_to_supplier_usd)}
+              {formatCurrency(optimal_structure?.net_advance_to_supplier_usd ?? final_payload?.net_payout_to_supplier_usd)}
             </div>
             <span className="text-[10px] text-slate-500">Gross: {formatCurrency(raw_invoice.invoice_amount)}</span>
           </div>
@@ -126,27 +129,34 @@ export function OneClickCard({ state, onActionComplete }: OneClickCardProps) {
           <div className="rounded-lg border border-slate-800 bg-[#090e1a] p-3">
             <span className="text-[10px] uppercase tracking-wider text-slate-400">Offered APR</span>
             <div className="mt-1 text-base font-bold text-sky-400 font-mono">
-              {formatPercent(optimal_structure?.selected_annualized_rate_pct)}
+              {formatPercent(optimal_structure?.implied_apr_pct ?? optimal_structure?.selected_annualized_rate_pct ?? final_payload?.annualized_apr_pct)}
             </div>
-            <span className="text-[10px] text-slate-500">Accelerated: {optimal_structure?.days_accelerated} days</span>
+            <span className="text-[10px] text-slate-500">Accelerated: {optimal_structure?.days_accelerated ?? final_payload?.days_accelerated ?? 0} days</span>
           </div>
 
           <div className="rounded-lg border border-slate-800 bg-[#090e1a] p-3">
             <span className="text-[10px] uppercase tracking-wider text-slate-400">Discount Fee / Savings</span>
             <div className="mt-1 text-base font-bold text-amber-400 font-mono">
-              {formatCurrency(optimal_structure?.discount_fee_amount_usd)}
+              {formatCurrency(
+                optimal_structure?.buyer_benefit_usd ??
+                optimal_structure?.discount_fee_amount_usd ??
+                final_payload?.buyer_yield_or_rebate_usd ??
+                (raw_invoice?.invoice_amount && optimal_structure?.net_advance_to_supplier_usd
+                  ? raw_invoice.invoice_amount - optimal_structure.net_advance_to_supplier_usd
+                  : 0)
+              )}
             </div>
             <span className="text-[10px] text-slate-500">
-              Buyer Yield: {formatCurrency(optimal_structure?.buyer_rebate_yield_usd)}
+              Buyer Yield: {formatCurrency(optimal_structure?.buyer_benefit_usd ?? optimal_structure?.buyer_rebate_yield_usd ?? final_payload?.buyer_yield_or_rebate_usd)}
             </span>
           </div>
 
           <div className="rounded-lg border border-slate-800 bg-[#090e1a] p-3">
             <span className="text-[10px] uppercase tracking-wider text-slate-400">Credit Concentration</span>
             <div className="mt-1 text-base font-bold text-slate-200 font-mono">
-              {formatPercent(guardrail_verdict?.single_supplier_concentration_pct)}
+              {formatPercent(guardrail_verdict?.supplier_concentration_pct ?? guardrail_verdict?.single_supplier_concentration_pct)}
             </div>
-            <span className="text-[10px] text-slate-500">Cap limit: 15.0%</span>
+            <span className="text-[10px] text-slate-500">Cap limit: {formatPercent(guardrail_verdict?.concentration_cap_pct ?? 15.0)}</span>
           </div>
         </div>
 

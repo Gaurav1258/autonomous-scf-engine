@@ -132,6 +132,7 @@ def treasury_dispatcher_node(state: SCFGraphState) -> dict[str, Any]:
         annualized_apr_pct=optimal_structure.implied_apr_pct,
         days_accelerated=optimal_structure.days_accelerated,
         expiry_timestamp_utc=expiry_iso,
+        expires_at_timestamp=expiry_dt.timestamp(),
         approval_token=token,
         treasurer_action_url=treasurer_url,
         supplier_portal_url=supplier_url,

@@ -76,25 +76,37 @@ export interface ElasticityCurvePoint {
 
 export interface FinancingStructure {
   instrument_type: FinancingInstrument;
-  selected_annualized_rate_pct: number;
-  predicted_acceptance_prob: number;
-  baseline_gross_amount_usd: number;
-  discount_fee_amount_usd: number;
-  net_advance_to_supplier_usd: number;
-  buyer_rebate_yield_usd: number;
-  bank_interest_margin_usd: number;
-  days_accelerated: number;
-  tenor_total_days: number;
-  cost_of_capital_delta_pct: number;
-  pricing_rationale: string;
+  selected_annualized_rate_pct?: number;
+  implied_apr_pct?: number;
+  predicted_acceptance_prob?: number;
+  supplier_acceptance_probability?: number;
+  expected_supplier_acceptance?: boolean;
+  baseline_gross_amount_usd?: number;
+  discount_fee_amount_usd?: number;
+  buyer_benefit_usd?: number;
+  net_advance_to_supplier_usd?: number;
+  buyer_rebate_yield_usd?: number;
+  bank_interest_margin_usd?: number;
+  offered_discount_pct?: number;
+  days_accelerated?: number;
+  tenor_total_days?: number;
+  cost_of_capital_delta_pct?: number;
+  pricing_rationale?: string;
+  reasoning?: string;
 }
 
 export interface GuardrailVerdict {
   is_approved: boolean;
-  facility_headroom_usd: number;
-  proposed_utilization_pct: number;
-  single_supplier_concentration_pct: number;
-  concentration_cap_usd: number;
+  facility_limit_usd?: number;
+  facility_drawn_after_usd?: number;
+  facility_headroom_remaining_usd?: number;
+  facility_headroom_usd?: number;
+  proposed_utilization_pct?: number;
+  supplier_concentration_pct?: number;
+  single_supplier_concentration_pct?: number;
+  concentration_cap_pct?: number;
+  concentration_cap_usd?: number;
+  breaches?: string[];
   rejection_reason?: string | null;
   verification_signature: string;
 }
@@ -103,17 +115,25 @@ export interface DispatchedPayload {
   offer_id: string;
   invoice_id: string;
   buyer_id: string;
-  supplier_id: string;
-  instrument_type: FinancingInstrument;
-  offered_apr_pct: number;
-  net_payout_amount: number;
-  currency: string;
-  accelerated_payment_date: string;
-  original_due_date: string;
-  expires_at_timestamp: number;
+  supplier_id?: string;
+  supplier_canonical_id?: string;
+  instrument?: FinancingInstrument;
+  instrument_type?: FinancingInstrument;
+  annualized_apr_pct?: number;
+  offered_apr_pct?: number;
+  net_payout_amount?: number;
+  net_payout_to_supplier_usd?: number;
+  buyer_yield_or_rebate_usd?: number;
+  currency?: string;
+  days_accelerated?: number;
+  accelerated_payment_date?: string;
+  original_due_date?: string;
+  expiry_timestamp_utc?: string;
+  expires_at_timestamp?: number;
   approval_token: string;
   treasurer_action_url: string;
-  supplier_action_url: string;
+  supplier_portal_url?: string;
+  supplier_action_url?: string;
 }
 
 export interface SCFGraphState {
