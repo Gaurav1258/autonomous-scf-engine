@@ -135,7 +135,8 @@ export const scfApi = {
     const params = new URLSearchParams();
     if (scenario) params.set("scenario", scenario);
     if (amount) params.set("amount", amount.toString());
-    return `${API_BASE_URL}/api/stream/invoice/${encodeURIComponent(invoiceId)}?${params.toString()}`;
+    const qs = params.toString();
+    return `${API_BASE_URL}/api/stream/invoice/${encodeURIComponent(invoiceId)}${qs ? `?${qs}` : ""}`;
   },
 };
 

@@ -173,15 +173,23 @@ export function OneClickCard({ state, onActionComplete }: OneClickCardProps) {
           </div>
         )}
 
-        {/* Settlement Reference Message */}
-        {settlementRef && (
+        {/* Settlement Reference Message or Settled Status */}
+        {(settlementRef || status === "EXECUTED_SETTLED") && (
           <div className="rounded-lg border border-cyan-500/40 bg-cyan-950/20 p-3 text-xs text-cyan-200">
             <div className="font-semibold text-cyan-400">Core Banking Settlement Dispatched!</div>
-            <div className="mt-1 font-mono text-[11px]">Reference: {settlementRef}</div>
+            <div className="mt-1 font-mono text-[11px]">
+              Status: EXECUTED &amp; SETTLED {settlementRef ? `| Ref: ${settlementRef}` : ""}
+            </div>
           </div>
         )}
 
-        {actionMessage && !settlementRef && (
+        {status === "CANCELLED_BY_TREASURER" && (
+          <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-3 text-xs text-slate-300">
+            <div className="font-semibold text-slate-400">Offer Cancelled by Treasurer</div>
+          </div>
+        )}
+
+        {actionMessage && !settlementRef && status !== "EXECUTED_SETTLED" && (
           <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-2.5 text-xs text-slate-300">
             {actionMessage}
           </div>
@@ -191,23 +199,27 @@ export function OneClickCard({ state, onActionComplete }: OneClickCardProps) {
         <div className="flex flex-wrap items-center gap-3 pt-2">
           <button
             onClick={() => handleAction("APPROVED", "TREASURER")}
-            disabled={isSubmitting || !!settlementRef || !final_payload}
+            disabled={isSubmitting || !!settlementRef || !final_payload || status === "EXECUTED_SETTLED" || status === "CANCELLED_BY_TREASURER"}
             className="flex-1 rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white shadow-md shadow-emerald-900/30 transition-all hover:bg-emerald-500 disabled:opacity-50"
           >
-            {isSubmitting ? "Processing..." : "⚡ Authorize Credit Line Draw (Treasurer)"}
+            {isSubmitting
+              ? "Processing..."
+              : status === "EXECUTED_SETTLED"
+              ? "✓ Facility Draw Settled"
+              : "⚡ Authorize Credit Line Draw (Treasurer)"}
           </button>
 
           <button
             onClick={() => handleAction("APPROVED", "SUPPLIER")}
-            disabled={isSubmitting || !!settlementRef || !final_payload}
+            disabled={isSubmitting || !!settlementRef || !final_payload || status === "EXECUTED_SETTLED" || status === "CANCELLED_BY_TREASURER"}
             className="rounded-lg border border-sky-500/40 bg-sky-950/30 px-4 py-2.5 text-xs font-semibold text-sky-300 transition-all hover:bg-sky-900/40 hover:border-sky-500 disabled:opacity-50"
           >
-            🤝 Accept Early Payment (Supplier)
+            {status === "EXECUTED_SETTLED" ? "✓ Payment Accepted" : "🤝 Accept Early Payment (Supplier)"}
           </button>
 
           <button
             onClick={() => handleAction("REJECTED", "TREASURER")}
-            disabled={isSubmitting || !!settlementRef || !final_payload}
+            disabled={isSubmitting || !!settlementRef || !final_payload || status === "EXECUTED_SETTLED" || status === "CANCELLED_BY_TREASURER"}
             className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2.5 text-xs font-semibold text-slate-400 transition-all hover:bg-slate-700 hover:text-white disabled:opacity-50"
           >
             ✕ Reject

@@ -164,27 +164,37 @@ async def stream_invoice_events(
     """
     Standard Server-Sent Events (SSE) endpoint for web clients (e.g., EventSource in Next.js).
     """
-    # Build invoice context
-    raw_invoice = {
-        "invoice_id": invoice_id,
-        "buyer_id": "CORP-INFOSYS",
-        "vendor_name_raw": vendor or "Reliance Ind.",
-        "invoice_amount": amount or 350_000.0,
-        "currency": "USD",
-        "due_date": "2026-11-30",
-        "issue_date": "2026-10-01",
-        "payment_terms_raw": "2/10 Net 60",
-        "erp_source": "SAP_S4HANA",
-    }
+    # 1. First check if invoice already exists in repository to prevent overwriting simulated/custom invoices
+    existing_record = repo.get_invoice(invoice_id)
+    if existing_record and isinstance(existing_record.state, dict) and "raw_invoice" in existing_record.state:
+        raw_invoice = dict(existing_record.state["raw_invoice"])
+        if vendor:
+            raw_invoice["vendor_name_raw"] = vendor
+        if amount:
+            raw_invoice["invoice_amount"] = amount
+    else:
+        # Build new invoice context
+        raw_invoice = {
+            "invoice_id": invoice_id,
+            "buyer_id": "CORP-INFOSYS",
+            "vendor_name_raw": vendor or "Reliance Ind.",
+            "invoice_amount": amount or 350_000.0,
+            "currency": "USD",
+            "due_date": "2026-11-30",
+            "issue_date": "2026-10-01",
+            "payment_terms_raw": "2/10 Net 60",
+            "erp_source": "SAP_S4HANA",
+        }
 
-    if scenario == "sanctioned_entity":
-        raw_invoice["vendor_name_raw"] = "Rosneft Trading SA"
-    elif scenario == "limit_overdraw":
-        raw_invoice["invoice_amount"] = 500_000_000.0
-    elif scenario == "reverse_factoring":
-        raw_invoice["buyer_id"] = "CORP-TATASTEEL"
-        raw_invoice["vendor_name_raw"] = "Tata Consultancy Services Ltd."
-        raw_invoice["invoice_amount"] = 12_500_000.0
+        if scenario == "sanctioned_entity":
+            raw_invoice["vendor_name_raw"] = "Rosneft Trading SA"
+            raw_invoice["invoice_amount"] = 850_000.0
+        elif scenario == "limit_overdraw":
+            raw_invoice["invoice_amount"] = 500_000_000.0
+        elif scenario == "reverse_factoring":
+            raw_invoice["buyer_id"] = "CORP-TATASTEEL"
+            raw_invoice["vendor_name_raw"] = "Tata Consultancy Services Ltd."
+            raw_invoice["invoice_amount"] = 12_500_000.0
 
     generator = _run_streaming_pipeline(raw_invoice, graph, repo)
     return EventSourceResponse(generator)

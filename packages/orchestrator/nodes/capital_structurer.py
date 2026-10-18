@@ -77,8 +77,8 @@ def capital_structurer_node(state: SCFGraphState) -> dict[str, Any]:
     invoice_amount = float(raw_invoice.get("invoice_amount", 100_000.0))
     net_days = int(raw_invoice.get("payment_net_days", 60))
 
-    # Days accelerated: advance payment to Day 10 of invoice lifecycle
-    days_accelerated = max(10, net_days - 10)
+    # Days accelerated: advance payment to Day 10 of invoice lifecycle (bounded strictly below net_days)
+    days_accelerated = min(max(1, net_days - 1), max(1, net_days - 10))
 
     # Determine instrument from Cash Forecaster recommendation
     if cash_forecast and cash_forecast.recommended_instrument == FinancingInstrument.REVERSE_FACTORING:

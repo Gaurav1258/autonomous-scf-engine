@@ -32,21 +32,24 @@ export default function TreasuryCockpitPage() {
     refreshInvoices();
   }, []);
 
-  // Fetch full state when an invoice is selected
+  // Fetch full state for an invoice
+  const refreshSelectedInvoice = async (invoiceId?: string) => {
+    const id = invoiceId || selectedInvoiceId;
+    if (!id) return;
+    try {
+      const res = await scfApi.getInvoice(id);
+      setSelectedInvoiceState(res.state);
+    } catch (err) {
+      console.error("Failed to fetch invoice details:", err);
+    }
+  };
+
   useEffect(() => {
     if (!selectedInvoiceId) {
       setSelectedInvoiceState(null);
       return;
     }
-
-    scfApi
-      .getInvoice(selectedInvoiceId)
-      .then((res) => {
-        setSelectedInvoiceState(res.state);
-      })
-      .catch((err) => {
-        console.error("Failed to fetch invoice details:", err);
-      });
+    refreshSelectedInvoice(selectedInvoiceId);
   }, [selectedInvoiceId]);
 
   // Handle Simulation Trigger
@@ -138,12 +141,18 @@ export default function TreasuryCockpitPage() {
         <div className="space-y-6 lg:col-span-5">
           <AgentTelemetry
             invoiceId={selectedInvoiceId}
-            onWorkflowComplete={refreshInvoices}
+            onWorkflowComplete={() => {
+              refreshInvoices();
+              refreshSelectedInvoice();
+            }}
           />
 
           <OneClickCard
             state={selectedInvoiceState}
-            onActionComplete={refreshInvoices}
+            onActionComplete={() => {
+              refreshInvoices();
+              refreshSelectedInvoice();
+            }}
           />
         </div>
       </div>

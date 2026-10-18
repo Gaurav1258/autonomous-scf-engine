@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from apps.api.dependencies import StateRepository, get_repository
+from packages.orchestrator.nodes.treasury_dispatcher import generate_approval_token
 
 router = APIRouter(prefix="/api/offers", tags=["Offers & Approvals"])
 
@@ -78,7 +79,15 @@ def execute_offer_action(
     expected_token = final_payload.get("approval_token")
     if expected_token and payload.approval_token:
         if payload.approval_token != expected_token:
-            raise HTTPException(status_code=403, detail="Invalid approval token for this offer.")
+            raw_invoice = record.state.get("raw_invoice", {})
+            valid_deterministic = generate_approval_token(
+                offer_id=offer_id,
+                invoice_id=record.invoice_id,
+                buyer_id=raw_invoice.get("buyer_id", "CORP-DEFAULT"),
+                amount=float(raw_invoice.get("invoice_amount", 0.0)),
+            )
+            if payload.approval_token != valid_deterministic:
+                raise HTTPException(status_code=403, detail="Invalid approval token for this offer.")
 
     # 3. Update Decision in Repository
     updated_record = repo.record_decision(

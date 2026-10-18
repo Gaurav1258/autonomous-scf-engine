@@ -171,13 +171,13 @@ export function CashFlowChart({
                     return null;
                   }}
                 />
-                {/* 10M Minimum Floor Reference Line */}
+                {/* Minimum Floor Reference Line */}
                 <ReferenceLine
-                  y={10_000_000}
+                  y={data?.min_cash_floor ?? 10_000_000}
                   stroke="#f43f5e"
                   strokeDasharray="4 4"
                   label={{
-                    value: "MIN CASH FLOOR ($10M)",
+                    value: `MIN CASH FLOOR (${formatCompactCurrency(data?.min_cash_floor ?? 10_000_000)})`,
                     fill: "#f43f5e",
                     fontSize: 9,
                     position: "insideTopLeft",

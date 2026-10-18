@@ -41,11 +41,11 @@ def generate_approval_token(
     invoice_id: str,
     buyer_id: str,
     amount: float,
-    expiry_iso: str,
+    expiry_iso: str = "",
     secret_salt: str = "SCF_DISPATCH_SECRET_TOKEN_2026",
 ) -> str:
-    """Generates an HMAC-style SHA256 one-time execution token."""
-    raw = f"{offer_id}|{invoice_id}|{buyer_id}|{amount:.2f}|{expiry_iso}|{secret_salt}"
+    """Generates a deterministic HMAC-style SHA256 one-time execution token."""
+    raw = f"{offer_id}|{invoice_id}|{buyer_id}|{amount:.2f}|{secret_salt}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
 
 
