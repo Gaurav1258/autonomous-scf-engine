@@ -28,6 +28,9 @@ COPY packages/mcp_server/pyproject.toml ./packages/mcp_server/
 COPY packages/orchestrator/pyproject.toml ./packages/orchestrator/
 COPY apps/api/pyproject.toml ./apps/api/
 
+# Copy agent-bpmn into /lang-bpmn so workspace relative dependency (../lang-bpmn) resolves
+COPY lang_bpmn_staged /lang-bpmn
+
 # 3. Pre-install dependencies into virtual environment
 RUN uv sync --frozen --no-install-project --no-dev || uv sync --no-dev
 

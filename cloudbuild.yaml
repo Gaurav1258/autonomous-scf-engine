@@ -33,10 +33,46 @@
 
 steps:
   # ---------------------------------------------------------------------------
+  # Step 0: Extract agent-bpmn from GCP Artifact Registry (or GitHub Fallback)
+  # ---------------------------------------------------------------------------
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'stage-0-prepare-agent-bpmn'
+    volumes:
+      - name: 'bpmn_shared'
+        path: '/lang-bpmn'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        set -e
+        echo "============================================================"
+        echo "STAGE 0: PREPARING AGENT-BPMN IN /lang-bpmn"
+        echo "============================================================"
+        IMAGE_NAME="$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/agent-bpmn:latest"
+        echo "Attempting to pull $$IMAGE_NAME from Artifact Registry..."
+        if docker pull "$$IMAGE_NAME"; then
+          echo ">>> Found image in Artifact Registry. Extracting into /lang-bpmn..."
+          docker create --name bpmn_temp "$$IMAGE_NAME"
+          docker cp bpmn_temp:/app/agent_bpmn /lang-bpmn/agent_bpmn
+          docker cp bpmn_temp:/app/pyproject.toml /lang-bpmn/pyproject.toml
+          docker cp bpmn_temp:/app/README.md /lang-bpmn/README.md
+          docker rm bpmn_temp
+          echo ">>> agent-bpmn extracted from Artifact Registry successfully."
+        else
+          echo ">>> Image not found in Artifact Registry. Falling back to GitHub repository..."
+          git clone --depth 1 https://github.com/Gaurav1258/lang-bpmn.git /lang-bpmn
+          echo ">>> Cloned lang-bpmn repository successfully."
+        fi
+        ls -la /lang-bpmn
+
+  # ---------------------------------------------------------------------------
   # Step 1: Strict Pre-Training Quality Gate (Pure Unit & Financial Tests)
   # ---------------------------------------------------------------------------
   - name: 'python:3.11-slim'
     id: 'stage-1-unit-tests-quality-gate'
+    volumes:
+      - name: 'bpmn_shared'
+        path: '/lang-bpmn'
     entrypoint: 'bash'
     env:
       - 'GCP_PROJECT_ID=$PROJECT_ID'
@@ -61,6 +97,9 @@ steps:
   # ---------------------------------------------------------------------------
   - name: 'python:3.11-slim'
     id: 'stage-2-train-and-sync-model'
+    volumes:
+      - name: 'bpmn_shared'
+        path: '/lang-bpmn'
     entrypoint: 'bash'
     env:
       - 'GCP_PROJECT_ID=$PROJECT_ID'
@@ -84,6 +123,9 @@ steps:
   # ---------------------------------------------------------------------------
   - name: 'python:3.11-slim'
     id: 'stage-3-ml-benchmarks-quality-gate'
+    volumes:
+      - name: 'bpmn_shared'
+        path: '/lang-bpmn'
     entrypoint: 'bash'
     env:
       - 'GCP_PROJECT_ID=$PROJECT_ID'
@@ -106,6 +148,9 @@ steps:
   # ---------------------------------------------------------------------------
   - name: 'python:3.11-slim'
     id: 'stage-4-langgraph-orchestrator-quality-gate'
+    volumes:
+      - name: 'bpmn_shared'
+        path: '/lang-bpmn'
     entrypoint: 'bash'
     env:
       - 'GCP_PROJECT_ID=$PROJECT_ID'
@@ -128,13 +173,17 @@ steps:
   # ---------------------------------------------------------------------------
   - name: 'gcr.io/cloud-builders/docker'
     id: 'stage-5-build-container-image'
+    volumes:
+      - name: 'bpmn_shared'
+        path: '/lang-bpmn'
+    entrypoint: 'bash'
     args:
-      - 'build'
-      - '-t'
-      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/scf-api:latest'
-      - '-f'
-      - 'Dockerfile'
-      - '.'
+      - '-c'
+      - |
+        mkdir -p ./lang_bpmn_staged
+        cp -r /lang-bpmn/* ./lang_bpmn_staged/
+        docker build -t $_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/scf-api:latest -f Dockerfile .
+        rm -rf ./lang_bpmn_staged/* && touch ./lang_bpmn_staged/.gitkeep
 
   # ---------------------------------------------------------------------------
   # Step 6: Push Container Image to Artifact Registry
