@@ -1,0 +1,61 @@
+version: "1.0"
+metadata:
+  id: "autonomous_scf_pipeline"
+  name: "Autonomous SCF Multi-Agent Orchestrator"
+  version: "1.0.0"
+  owner_department: "Treasury Operations"
+  description: "AgentBPMN multi-agent orchestration for autonomous early payment discounting, compliance verification, and 1-click execution."
+
+guardrails:
+  max_total_budget_usd: 1.00
+  workflow_timeout_seconds: 300
+  max_loop_iterations: 3
+
+nodes:
+  - id: "cash_forecaster"
+    type: "block"
+    name: "Corporate Cash Forecaster"
+    block: "scf.cash_forecaster"
+
+  - id: "risk_sentinel"
+    type: "block"
+    name: "Vendor Risk & Sanctions Sentinel"
+    block: "scf.risk_sentinel"
+
+  - id: "capital_structurer"
+    type: "block"
+    name: "Optimal Capital Structurer"
+    block: "scf.capital_structurer"
+
+  - id: "guardrail_validator"
+    type: "block"
+    name: "Pre-Flight Credit Guardrail Validator"
+    block: "scf.guardrail_validator"
+
+  - id: "treasury_dispatcher"
+    type: "block"
+    name: "1-Click Treasury Offer Dispatcher"
+    block: "scf.treasury_dispatcher"
+
+edges:
+  - source: "START"
+    target: "cash_forecaster"
+  - source: "cash_forecaster"
+    target: "risk_sentinel"
+  - source: "risk_sentinel"
+    target: "END"
+    condition: "status == 'REJECTED_SANCTIONS' or status == 'REJECTED_GUARDRAIL'"
+  - source: "risk_sentinel"
+    target: "capital_structurer"
+    condition: "status != 'REJECTED_SANCTIONS' and status != 'REJECTED_GUARDRAIL'"
+  - source: "capital_structurer"
+    target: "guardrail_validator"
+  - source: "guardrail_validator"
+    target: "END"
+    condition: "status == 'REJECTED_GUARDRAIL'"
+  - source: "guardrail_validator"
+    target: "treasury_dispatcher"
+    condition: "status != 'REJECTED_GUARDRAIL'"
+  - source: "treasury_dispatcher"
+    target: "END"
+

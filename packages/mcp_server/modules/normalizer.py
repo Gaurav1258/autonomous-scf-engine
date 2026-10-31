@@ -129,7 +129,9 @@ def load_default_vendor_master() -> list[dict[str, Any]]:
     Loads vendor master: checks local generated file, then GCS, and falls back
     to built-in canonical seed records.
     """
-    local_file = Path("data/generated/synthetic_vendor_master.json")
+    local_file = Path(__file__).resolve().parents[3] / "data/generated/synthetic_vendor_master.json"
+    if not local_file.exists():
+        local_file = Path("data/generated/synthetic_vendor_master.json")
     if local_file.exists():
         try:
             with open(local_file, "r", encoding="utf-8") as f:

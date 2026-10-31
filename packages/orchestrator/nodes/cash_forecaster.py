@@ -79,7 +79,9 @@ def load_buyer_treasury_profile(buyer_id: str) -> dict[str, float]:
     if available, otherwise falls back to institutional defaults.
     """
     # 1. Check synthetic facilities JSON if present
-    facility_path = Path("data/generated/synthetic_buyers_facilities.json")
+    facility_path = Path(__file__).resolve().parents[3] / "data/generated/synthetic_buyers_facilities.json"
+    if not facility_path.exists():
+        facility_path = Path("data/generated/synthetic_buyers_facilities.json")
     if facility_path.exists():
         try:
             with open(facility_path, "r", encoding="utf-8") as f:

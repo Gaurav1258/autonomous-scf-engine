@@ -81,6 +81,7 @@ def health_check() -> dict[str, Any]:
         "uptime_seconds": round(time.time() - _START_TIME, 2),
         "environment": os.getenv("ENVIRONMENT", "development"),
         "subsystems": {
+            "agent_bpmn_orchestrator": "READY",
             "langgraph_multi_agent": "INITIALIZED",
             "fastmcp_toolkit": "READY",
             "xgboost_ml_acceptance_model": "LOADED" if model_loaded else "STANDBY",

@@ -38,7 +38,9 @@ DEFAULT_SANCTIONS_WATCHLIST: set[str] = {
 def load_vendor_watchlist() -> set[str]:
     """Loads active sanctions watchlist from vendor master or default registry."""
     watchlist = set(DEFAULT_SANCTIONS_WATCHLIST)
-    vendor_master_file = Path("data/generated/synthetic_vendor_master.json")
+    vendor_master_file = Path(__file__).resolve().parents[3] / "data/generated/synthetic_vendor_master.json"
+    if not vendor_master_file.exists():
+        vendor_master_file = Path("data/generated/synthetic_vendor_master.json")
     if vendor_master_file.exists():
         try:
             with open(vendor_master_file, "r", encoding="utf-8") as f:

@@ -73,7 +73,7 @@ GCS_MODEL_PATH: str = "models/supplier_acceptance_model.json"
 LOCAL_DATA_DIR: Path = Path(os.getenv("DATASET_LOCAL_OUTPUT_DIR", "data/generated"))
 LOCAL_DATA_FILE: Path = LOCAL_DATA_DIR / "scf_supplier_acceptance_dataset.csv"
 
-MODEL_DIR: Path = Path("packages/orchestrator/ml/models")
+MODEL_DIR: Path = Path(__file__).resolve().parent / "models"
 MODEL_FILE: Path = MODEL_DIR / "supplier_acceptance_model.json"
 META_FILE: Path = MODEL_DIR / "model_metadata.json"
 

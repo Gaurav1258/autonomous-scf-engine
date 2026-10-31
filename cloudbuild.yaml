@@ -117,11 +117,11 @@ steps:
         set -e
         export PYTHONPATH=.
         echo "============================================================"
-        echo "STAGE 4: VERIFYING MULTI-AGENT LANGGRAPH STATE MACHINE"
+        echo "STAGE 4: VERIFYING AGENT-BPMN & MULTI-AGENT STATE MACHINE"
         echo "============================================================"
         pip install --no-cache-dir uv
-        uv run pytest tests/test_state.py tests/test_cash_forecaster.py tests/test_risk_sentinel.py tests/test_capital_structurer.py tests/test_guardrail_validator.py tests/test_treasury_dispatcher.py tests/test_graph.py tests/test_api_routes.py -v --tb=short
-        echo ">>> STAGE 4 PASSED: Multi-Agent LangGraph workflows & FastAPI Gateway verified."
+        uv run pytest tests/test_agent_bpmn_orchestrator.py tests/test_state.py tests/test_cash_forecaster.py tests/test_risk_sentinel.py tests/test_capital_structurer.py tests/test_guardrail_validator.py tests/test_treasury_dispatcher.py tests/test_graph.py tests/test_api_routes.py -v --tb=short
+        echo ">>> STAGE 4 PASSED: AgentBPMN workflows & FastAPI Gateway verified."
 
   # ---------------------------------------------------------------------------
   # Step 5: Build Container Image for Cloud Run

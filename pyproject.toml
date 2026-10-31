@@ -5,6 +5,9 @@ members = [
     "apps/api",
 ]
 
+[tool.uv.sources]
+agent-bpmn = { path = "../lang-bpmn", editable = true }
+
 [tool.uv]
 dev-dependencies = [
     "pytest>=8.3",
@@ -13,4 +16,3 @@ dev-dependencies = [
     "ruff>=0.8",
     "mypy>=1.13",
 ]
-

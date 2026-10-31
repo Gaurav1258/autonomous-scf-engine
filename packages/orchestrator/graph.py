@@ -1,28 +1,28 @@
 """
 packages/orchestrator/graph.py
 ==============================
-The Master LangGraph Multi-Agent State Machine for Autonomous SCF.
+The Master Multi-Agent Process Engine for Autonomous SCF, powered by AgentBPMN (lang-bpmn).
 
 Topology & Execution Flow:
 
                   [START]
                      │
                      ▼
-             1. cash_forecaster
+             1. cash_forecaster (scf.cash_forecaster)
                      │
                      ▼
-             2. risk_sentinel
+             2. risk_sentinel (scf.risk_sentinel)
                      │
-         [route_after_risk_sentinel]
+          [Conditional Routing]
           ├── If REJECTED_SANCTIONS or DUPLICATE ──────────► [END] (Compliance Freeze)
-          └── If CLEAN (ANALYZING) ─────────────────────────► 3. capital_structurer
+          └── If CLEAN (ANALYZING) ─────────────────────────► 3. capital_structurer (scf.capital_structurer)
                                                                     │
                                                                     ▼
-                                                            4. guardrail_validator
+                                                            4. guardrail_validator (scf.guardrail_validator)
                                                                     │
-                                                         [route_after_guardrails]
+                                                         [Conditional Routing]
                                                           ├── If REJECTED_GUARDRAIL ──► [END] (Credit Cap Breach)
-                                                          └── If APPROVED ────────────► 5. treasury_dispatcher
+                                                          └── If APPROVED ────────────► 5. treasury_dispatcher (scf.treasury_dispatcher)
                                                                                                 │
                                                                                                 ▼
                                                                                               [END] (Dispatched)
@@ -30,114 +30,179 @@ Topology & Execution Flow:
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
 from typing import Any, Literal, Optional
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import END, START, StateGraph
 
-from packages.orchestrator.nodes.capital_structurer import capital_structurer_node
-from packages.orchestrator.nodes.cash_forecaster import cash_forecaster_node
-from packages.orchestrator.nodes.guardrail_validator import guardrail_validator_node
-from packages.orchestrator.nodes.risk_sentinel import risk_sentinel_node
-from packages.orchestrator.nodes.treasury_dispatcher import treasury_dispatcher_node
+# Ensure agent_bpmn is importable (installed or from sibling repo)
+try:
+    import agent_bpmn
+except ImportError:
+    for candidate in [
+        Path(__file__).resolve().parents[3] / "lang-bpmn",
+        Path("D:/Projects/lang-bpmn"),
+    ]:
+        if candidate.exists() and str(candidate) not in sys.path:
+            sys.path.insert(0, str(candidate))
+            break
+    import agent_bpmn
+
+from agent_bpmn.compiler import CompiledWorkflow, GraphCompiler
+from agent_bpmn.dsl import (
+    NodeType,
+    WorkflowDefinition,
+    WorkflowEdge,
+    WorkflowGuardrails,
+    WorkflowMetadata,
+    WorkflowNode,
+    parse_workflow_yaml,
+)
+from packages.orchestrator.blocks import register_scf_blocks
 from packages.orchestrator.state import SCFGraphState, WorkflowStatus
+
+# Path to declarative workflow YAML definition
+WORKFLOW_YAML_PATH = Path(__file__).resolve().parent / "scf_workflow.yaml"
 
 
 # ---------------------------------------------------------------------------
-# Conditional Routing Functions
+# Declarative Workflow Topology
+# ---------------------------------------------------------------------------
+
+def get_scf_workflow_definition() -> WorkflowDefinition:
+    """
+    Returns the declarative WorkflowDefinition AST for Autonomous SCF.
+    Loads from scf_workflow.yaml if present, or constructs the programmatic AST.
+    """
+    if WORKFLOW_YAML_PATH.exists():
+        try:
+            return parse_workflow_yaml(WORKFLOW_YAML_PATH)
+        except Exception:
+            pass
+
+    return WorkflowDefinition(
+        metadata=WorkflowMetadata(
+            id="autonomous_scf_pipeline",
+            name="Autonomous Supply Chain Finance Multi-Agent Engine",
+            version="1.0.0",
+            owner_department="Treasury Operations",
+            description="AgentBPMN orchestration for autonomous early payment discounting and risk validation.",
+        ),
+        guardrails=WorkflowGuardrails(
+            max_total_budget_usd=1.00,
+            workflow_timeout_seconds=300,
+            max_loop_iterations=3,
+        ),
+        nodes=[
+            WorkflowNode(
+                id="cash_forecaster",
+                type=NodeType.BLOCK,
+                name="Corporate Cash Forecaster",
+                block="scf.cash_forecaster",
+            ),
+            WorkflowNode(
+                id="risk_sentinel",
+                type=NodeType.BLOCK,
+                name="Vendor Risk & Sanctions Sentinel",
+                block="scf.risk_sentinel",
+            ),
+            WorkflowNode(
+                id="capital_structurer",
+                type=NodeType.BLOCK,
+                name="Optimal Capital Structurer",
+                block="scf.capital_structurer",
+            ),
+            WorkflowNode(
+                id="guardrail_validator",
+                type=NodeType.BLOCK,
+                name="Pre-Flight Credit Guardrail Validator",
+                block="scf.guardrail_validator",
+            ),
+            WorkflowNode(
+                id="treasury_dispatcher",
+                type=NodeType.BLOCK,
+                name="1-Click Treasury Offer Dispatcher",
+                block="scf.treasury_dispatcher",
+            ),
+        ],
+        edges=[
+            WorkflowEdge(source="START", target="cash_forecaster"),
+            WorkflowEdge(source="cash_forecaster", target="risk_sentinel"),
+            WorkflowEdge(
+                source="risk_sentinel",
+                target="END",
+                condition="status == 'REJECTED_SANCTIONS' or status == 'REJECTED_GUARDRAIL'",
+            ),
+            WorkflowEdge(
+                source="risk_sentinel",
+                target="capital_structurer",
+                condition="status != 'REJECTED_SANCTIONS' and status != 'REJECTED_GUARDRAIL'",
+            ),
+            WorkflowEdge(source="capital_structurer", target="guardrail_validator"),
+            WorkflowEdge(
+                source="guardrail_validator",
+                target="END",
+                condition="status == 'REJECTED_GUARDRAIL'",
+            ),
+            WorkflowEdge(
+                source="guardrail_validator",
+                target="treasury_dispatcher",
+                condition="status != 'REJECTED_GUARDRAIL'",
+            ),
+            WorkflowEdge(source="treasury_dispatcher", target="END"),
+        ],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Conditional Routing Helper Functions (Preserved for compatibility)
 # ---------------------------------------------------------------------------
 
 def route_after_risk_sentinel(
     state: SCFGraphState,
 ) -> Literal["capital_structurer", "__end__"]:
-    """
-    Evaluates the compliance and fraud check from Node 2 (Risk Sentinel).
-
-    If the supplier is on a sanctions list (OFAC) or the invoice is a duplicate,
-    short-circuit immediately to END. Never compute financial math on illicit entities.
-    """
+    """Evaluates compliance / duplicate status after Node 2."""
     status = state.get("status")
     if status in (WorkflowStatus.REJECTED_SANCTIONS, WorkflowStatus.REJECTED_GUARDRAIL):
-        return END
+        return "__end__"
     return "capital_structurer"
 
 
 def route_after_guardrails(
     state: SCFGraphState,
 ) -> Literal["treasury_dispatcher", "__end__"]:
-    """
-    Evaluates the credit limit and concentration check from Node 4 (Guardrail Validator).
-
-    If the proposed advance breaches credit headroom or the 15% single-supplier cap,
-    halt immediately at END. Only dispatch pre-flight approved offers.
-    """
+    """Evaluates credit headroom and concentration check after Node 4."""
     status = state.get("status")
     if status == WorkflowStatus.REJECTED_GUARDRAIL:
-        return END
+        return "__end__"
     return "treasury_dispatcher"
 
 
 # ---------------------------------------------------------------------------
-# Graph Assembly & Compilation
+# Graph Assembly & Compilation via AgentBPMN GraphCompiler
 # ---------------------------------------------------------------------------
 
-def build_scf_graph(checkpointer: Optional[Any] = None) -> StateGraph:
+def build_scf_graph(checkpointer: Optional[Any] = None) -> CompiledWorkflow:
     """
-    Constructs and returns the compiled LangGraph StateGraph.
+    Constructs and returns the compiled AgentBPMN workflow.
+    Translates declarative BPMN nodes and certified domain blocks into an executable runtime
+    with Process Intelligence Heatmap telemetry, SLA timers, and guardrails.
 
     Args:
         checkpointer: Optional persistence checkpointer (e.g., MemorySaver)
                       to pause execution for human-in-the-loop approvals.
 
     Returns:
-        A compiled LangGraph runnable application.
+        A CompiledWorkflow runnable application with .invoke(), .ainvoke(), and .astream().
     """
-    # 1. Initialize StateGraph with the shared state contract
-    workflow = StateGraph(SCFGraphState)
+    # 1. Ensure all 5 certified SCF domain blocks are registered
+    register_scf_blocks()
 
-    # 2. Register the 5 Agent Worker Nodes
-    workflow.add_node("cash_forecaster", cash_forecaster_node)
-    workflow.add_node("risk_sentinel", risk_sentinel_node)
-    workflow.add_node("capital_structurer", capital_structurer_node)
-    workflow.add_node("guardrail_validator", guardrail_validator_node)
-    workflow.add_node("treasury_dispatcher", treasury_dispatcher_node)
+    # 2. Load declarative workflow definition AST
+    workflow = get_scf_workflow_definition()
 
-    # 3. Define Edges (How Nodes Connect)
-    # Entrypoint: Start immediately at the Cash Forecaster
-    workflow.add_edge(START, "cash_forecaster")
-
-    # From Cash Forecaster -> Always proceed to Risk Sentinel
-    workflow.add_edge("cash_forecaster", "risk_sentinel")
-
-    # Conditional Branch after Risk Sentinel:
-    # If sanctions hit -> END. If clean -> capital_structurer
-    workflow.add_conditional_edges(
-        "risk_sentinel",
-        route_after_risk_sentinel,
-        {
-            "capital_structurer": "capital_structurer",
-            END: END,
-        },
-    )
-
-    # From Capital Structurer -> Always proceed to Guardrail Validator
-    workflow.add_edge("capital_structurer", "guardrail_validator")
-
-    # Conditional Branch after Guardrail Validator:
-    # If limit breached -> END. If approved -> treasury_dispatcher
-    workflow.add_conditional_edges(
-        "guardrail_validator",
-        route_after_guardrails,
-        {
-            "treasury_dispatcher": "treasury_dispatcher",
-            END: END,
-        },
-    )
-
-    # From Treasury Dispatcher -> Workflow complete
-    workflow.add_edge("treasury_dispatcher", END)
-
-    # 4. Compile the graph with optional checkpointing
-    return workflow.compile(checkpointer=checkpointer)
+    # 3. Compile declarative AST via AgentBPMN GraphCompiler
+    compiler = GraphCompiler(checkpointer=checkpointer)
+    return compiler.compile(workflow)
 
 
 def create_initial_state(raw_invoice: dict[str, Any]) -> SCFGraphState:
@@ -154,4 +219,3 @@ def create_initial_state(raw_invoice: dict[str, Any]) -> SCFGraphState:
         "audit_trail": ["Workflow initialized. Starting autonomous SCF analysis."],
         "errors": [],
     }
-
