@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from enum import Enum
 from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -33,27 +34,20 @@ class InvoiceIngestRequest(BaseModel):
     buyer_sector: Optional[str] = Field("IT Services", description="Industry sector of anchor buyer")
 
 
-def serialize_graph_state(state: dict[str, Any]) -> dict[str, Any]:
-    """Recursively converts Pydantic objects and Enums inside graph state to pure JSON dicts."""
-    out: dict[str, Any] = {}
-    for k, v in state.items():
-        if hasattr(v, "model_dump"):
-            out[k] = v.model_dump(mode="json")
-        elif hasattr(v, "value"):  # Enum
-            out[k] = v.value
-        elif isinstance(v, list):
-            serialized_list = []
-            for item in v:
-                if hasattr(item, "model_dump"):
-                    serialized_list.append(item.model_dump(mode="json"))
-                elif hasattr(item, "value"):
-                    serialized_list.append(item.value)
-                else:
-                    serialized_list.append(item)
-            out[k] = serialized_list
-        else:
-            out[k] = v
-    return out
+def serialize_graph_state(obj: Any) -> Any:
+    """Recursively converts Pydantic objects, Enums, dicts, and lists inside graph state to pure JSON serializable objects."""
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump(mode="json")
+    elif hasattr(obj, "dict") and callable(getattr(obj, "dict", None)) and not isinstance(obj, type):
+        return obj.dict()
+    elif isinstance(obj, Enum) or (hasattr(obj, "value") and not isinstance(obj, (int, float, str, bool, dict, list, tuple, set))):
+        return obj.value
+    elif isinstance(obj, dict):
+        return {k: serialize_graph_state(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple, set)):
+        return [serialize_graph_state(item) for item in obj]
+    else:
+        return obj
 
 
 @router.post("/process")

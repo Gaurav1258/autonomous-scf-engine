@@ -119,34 +119,52 @@ def _build_agent_telemetry_summary(node_name: str, updates: dict[str, Any]) -> s
     """Creates a concise high-signal description of what the agent decided."""
     if node_name == "cash_forecaster":
         fc = updates.get("cash_forecast")
-        rec = getattr(fc, "recommended_instrument", "UNKNOWN") if fc else "ANALYZING"
+        if isinstance(fc, dict):
+            rec = fc.get("recommended_instrument", "UNKNOWN")
+        else:
+            rec = getattr(fc, "recommended_instrument", "UNKNOWN") if fc else "ANALYZING"
         return f"Forecaster evaluated 60-day cash floor. Recommended instrument: {rec}."
     elif node_name == "risk_sentinel":
         rp = updates.get("risk_profile")
-        vendor = getattr(rp, "vendor_canonical_name", "Supplier") if rp else "Supplier"
-        cleared = getattr(rp, "sanctions_cleared", True) if rp else True
+        if isinstance(rp, dict):
+            vendor = rp.get("vendor_canonical_name", "Supplier")
+            cleared = rp.get("sanctions_cleared", True)
+        else:
+            vendor = getattr(rp, "vendor_canonical_name", "Supplier") if rp else "Supplier"
+            cleared = getattr(rp, "sanctions_cleared", True) if rp else True
         if not cleared:
             return f"Risk Sentinel: CRITICAL OFAC watchlist breach on {vendor}! Halting workflow."
         return f"Risk Sentinel resolved Golden Record '{vendor}'. Sanctions verified clean."
     elif node_name == "capital_structurer":
         st = updates.get("optimal_structure")
-        apr = (
-            getattr(st, "implied_apr_pct", None)
-            or getattr(st, "selected_annualized_rate_pct", None)
-            or 0.0
-        ) if st else 0.0
-        payout = getattr(st, "net_advance_to_supplier_usd", 0.0) if st else 0.0
+        if isinstance(st, dict):
+            apr = st.get("implied_apr_pct") or st.get("selected_annualized_rate_pct") or 0.0
+            payout = st.get("net_advance_to_supplier_usd") or 0.0
+        else:
+            apr = (
+                getattr(st, "implied_apr_pct", None)
+                or getattr(st, "selected_annualized_rate_pct", None)
+                or 0.0
+            ) if st else 0.0
+            payout = getattr(st, "net_advance_to_supplier_usd", 0.0) if st else 0.0
         return f"Structurer optimized ML elasticity curve: Selected {apr:.2f}% APR, net payout ${payout:,.2f}."
     elif node_name == "guardrail_validator":
         gv = updates.get("guardrail_verdict")
-        approved = getattr(gv, "is_approved", True) if gv else True
-        if not approved:
+        if isinstance(gv, dict):
+            approved = gv.get("is_approved", True)
+            reason = gv.get("rejection_reason", "Facility limit breach")
+        else:
+            approved = getattr(gv, "is_approved", True) if gv else True
             reason = getattr(gv, "rejection_reason", "Facility limit breach") if gv else "Limit breach"
+        if not approved:
             return f"Guardrail Validator REJECTED: {reason}."
         return "Guardrail Validator: Credit limit & concentration verified. SHA256 digest signed."
     elif node_name == "treasury_dispatcher":
         pl = updates.get("final_payload")
-        oid = getattr(pl, "offer_id", "OFFER") if pl else "OFFER"
+        if isinstance(pl, dict):
+            oid = pl.get("offer_id", "OFFER")
+        else:
+            oid = getattr(pl, "offer_id", "OFFER") if pl else "OFFER"
         return f"Treasury Dispatcher packaged 1-click execution payload: Offer ID {oid} (expires in 48h)."
     return f"Completed step: {node_name}."
 
